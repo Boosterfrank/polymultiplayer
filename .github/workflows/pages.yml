@@ -5,7 +5,10 @@ name: Deploy game copy to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    # The github-pages environment only accepts deployments from the repository's default branch,
+    # which is still claude/charming-gauss-bfnuqd (the first branch pushed). Once main is the default
+    # branch and listed under Settings -> Environments -> github-pages, the second entry can go.
+    branches: [main, "claude/charming-gauss-bfnuqd"]
   workflow_dispatch:
 
 permissions:

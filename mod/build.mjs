@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Bundles mod/src into the PML version folder declared in manifest.json.
+// Bundles mod/src into the PML version folder declared in manifest.json (or --outdir <dir>).
 import { build, context } from "esbuild";
 import fs from "node:fs";
 import path from "node:path";
@@ -10,7 +10,8 @@ const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "u
 const gameVersion = "0.6.3";
 const modVersion = manifest.latest[gameVersion];
 if (!modVersion) throw new Error(`manifest.json has no version for PolyTrack ${gameVersion}`);
-const outdir = path.join(root, modVersion);
+const outdirArg = process.argv.indexOf("--outdir");
+const outdir = outdirArg >= 0 ? path.resolve(process.argv[outdirArg + 1]) : path.join(root, modVersion);
 fs.mkdirSync(outdir, { recursive: true });
 
 const defaultServer = process.env.POLYRANKED_DEFAULT_SERVER ?? "ws://localhost:8788";

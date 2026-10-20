@@ -67,8 +67,6 @@ try {
   /* not a git checkout; fine */
 }
 
-// 2. Build the mod
-run(process.execPath, [path.join(root, "mod/build.mjs")], { cwd: root });
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
 const modVersion = manifest.latest["0.6.3"];
 
@@ -112,13 +110,15 @@ const ensureBlock = `/* PolyRanked: the built-in mod is always in the list (adde
 loader = loader.slice(0, returnIdx) + ensureBlock + loader.slice(returnIdx);
 fs.writeFileSync(loaderPath, loader);
 
-// 5. Add the mod, importing PolyTypes from the copy instead of the CDN
+// 5. Build the mod straight into the copy (the repo's own version folder is left untouched),
+//    importing PolyTypes from the copy instead of the CDN
 const modOut = path.join(outDir, "mod");
 fs.mkdirSync(path.join(modOut, modVersion), { recursive: true });
 fs.copyFileSync(path.join(root, "manifest.json"), path.join(modOut, "manifest.json"));
 for (const f of fs.readdirSync(path.join(root, modVersion))) {
-  fs.copyFileSync(path.join(root, modVersion, f), path.join(modOut, modVersion, f));
+  if (f !== "main.mod.js") fs.copyFileSync(path.join(root, modVersion, f), path.join(modOut, modVersion, f));
 }
+run(process.execPath, [path.join(root, "mod/build.mjs"), "--outdir", path.join(modOut, modVersion)], { cwd: root });
 const bundlePath = path.join(modOut, modVersion, "main.mod.js");
 let bundle = fs.readFileSync(bundlePath, "utf8");
 bundle = assertReplace(bundle, 'from "https://cdn.polymodloader.com/cb/PolyTrackMods/PolyModLoader/0.6.3/PolyTypes.js"', 'from "../../PolyTypes.js"', "PolyTypes import");

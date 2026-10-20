@@ -104,7 +104,7 @@ function formatFrames(frames) {
 }
 
 // mod/src/config.js
-var DEFAULT_SERVER_URL = true ? "ws://localhost:8788" : "ws://localhost:8788";
+var DEFAULT_SERVER_URL = true ? "ws://127.0.0.1:38667" : "ws://localhost:8788";
 var MOD_VERSION = true ? "0.1.0" : "0.0.0-dev";
 var MOD_ID = "polyranked";
 var MOD_NAME = "PolyRanked";

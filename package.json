@@ -11,7 +11,9 @@
     "test:mod": "node --test mod/test/*.test.js",
     "start:server": "npm --prefix server start",
     "dev": "npm run build && node server/src/index.js --serve-mod .",
-    "e2e": "node test/e2e/run.mjs"
+    "e2e": "node test/e2e/run.mjs",
+    "build:site": "node tools/build-site.mjs",
+    "e2e:site": "node test/e2e/site-smoke.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.25.0",

@@ -1,0 +1,50 @@
+# Builds the PolyModLoader copy with PolyRanked pre-installed and publishes it to GitHub Pages.
+# One-time setup in the repository settings: Pages -> Source: "GitHub Actions".
+# Optional: an Actions variable POLYRANKED_SERVER (e.g. wss://ranked.example.com) is baked in as the default server.
+name: Deploy game copy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Tries to switch Pages on automatically; if the token may not, enable it once under Settings -> Pages.
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+        continue-on-error: true
+      - run: node tools/build-site.mjs --out dist/site
+        env:
+          POLYRANKED_DEFAULT_SERVER: ${{ vars.POLYRANKED_SERVER || 'ws://localhost:8788' }}
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

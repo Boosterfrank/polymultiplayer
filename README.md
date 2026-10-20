@@ -73,6 +73,32 @@ can connect with `wss://` from the HTTPS game page.
 `docker build -t polyranked server && docker run -p 8788:8788 -v polyranked-data:/app/data polyranked`
 also works (see `server/Dockerfile`).
 
+## Your own game copy with PolyRanked built in
+
+`tools/build-site.mjs` produces a self-contained copy of the PolyModLoader web
+version (pinned to the 0.6.3 build this mod targets) in which the loader always
+registers PolyRanked, served from the copy itself. Players who open that URL get
+the mod without touching the mod manager; they can still unload it there.
+
+Publishing it on GitHub Pages (free, stable URL):
+
+1. In the repository settings open *Pages* and set *Source* to **GitHub Actions**.
+2. Optional: under *Secrets and variables → Actions → Variables* add
+   `POLYRANKED_SERVER` = `wss://your-server` so the copy connects to your server
+   by default.
+3. Push to `main` (or run the *Deploy game copy to GitHub Pages* workflow). The
+   game is then available at `https://<your-user>.github.io/polymultiplayer/`.
+
+Building it yourself: `POLYRANKED_DEFAULT_SERVER=wss://… npm run build:site`
+writes `dist/site/`, which any static host can serve (for example
+`npx http-server dist/site` on the Pi behind the same Cloudflare tunnel).
+`npm run e2e:site` smoke-tests a build in headless Chromium.
+
+Keep in mind that, exactly like PolyModLoader itself, the copy redistributes
+PolyTrack's game files, which belong to Kodub, and that the official online
+features (leaderboards, invite-code multiplayer) only work from the official PML
+hosts unless you also add their PolyProxy mod.
+
 ## Development
 
 ```bash
@@ -80,6 +106,7 @@ npm install                    # esbuild for the mod bundle
 npm run build                  # mod/src → 0.1.0/main.mod.js (+ POLYRANKED_DEFAULT_SERVER=wss://… to bake a default)
 npm test                       # mod unit tests + server tests (rules, rating, matchmaking, match engine, sockets)
 npm run dev                    # build, then run the server and serve the mod at http://localhost:8788/mod/
+npm run build:site             # self-contained PolyModLoader copy with the mod pre-installed -> dist/site/
 ```
 
 For local testing add `http://localhost:8788/mod` as the mod URL in PML (PML does

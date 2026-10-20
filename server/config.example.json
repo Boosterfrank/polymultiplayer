@@ -1,0 +1,26 @@
+{
+  "port": 8788,
+  "host": "0.0.0.0",
+  "dataDir": "./data",
+  "gameVersion": "0.6.3",
+  "requireVanillaPhysics": true,
+  "trackPerRound": false,
+  "queues": {
+    "duel": { "name": "Ranked 1v1", "teams": 2, "teamSize": 1, "scoring": "duel", "roundsToWin": 4, "maxRounds": 9 },
+    "teams": { "name": "Ranked 3v3", "teams": 2, "teamSize": 3, "scoring": "teams", "roundsToWin": 5, "maxRounds": 13, "pointsTable": [6, 5, 4, 3, 2, 1] },
+    "ffa": { "name": "Ranked FFA", "players": 4, "minPlayers": 3, "scoring": "points", "maxRounds": 5, "pointsTable": [10, 6, 4, 3, 2, 1] }
+  },
+  "rounds": {
+    "countdownSeconds": 4,
+    "finishGraceSeconds": 15,
+    "resultsSeconds": 7,
+    "readyTimeoutSeconds": 30,
+    "disconnectGraceSeconds": 20
+  },
+  "rating": {
+    "initial": 1000,
+    "kPlacement": 40,
+    "kNormal": 20,
+    "placementMatches": 5
+  }
+}

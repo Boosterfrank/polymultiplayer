@@ -1,0 +1,19 @@
+{
+  "name": "polyranked-server",
+  "version": "0.1.0",
+  "description": "Matchmaking and ranked-match server for the PolyRanked PolyTrack mod",
+  "type": "module",
+  "private": true,
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node src/index.js --serve-mod ..",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=18.17"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

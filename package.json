@@ -1,0 +1,20 @@
+{
+  "name": "polyranked",
+  "version": "0.1.0",
+  "description": "Trackmania-style ranked matchmaking for PolyTrack (PolyModLoader mod + server)",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node mod/build.mjs",
+    "watch": "node mod/build.mjs --watch",
+    "test": "npm run test:mod && npm --prefix server test",
+    "test:mod": "node --test mod/test/*.test.js",
+    "start:server": "npm --prefix server start",
+    "dev": "npm run build && node server/src/index.js --serve-mod .",
+    "e2e": "node test/e2e/run.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "playwright-core": "^1.64.1"
+  }
+}

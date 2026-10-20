@@ -16,9 +16,11 @@ permissions:
   pages: write
   id-token: write
 
+# Pushing the same commit to both branches starts two runs; let them queue instead of cancelling
+# each other, so the run from the allowed branch always gets to deploy.
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:

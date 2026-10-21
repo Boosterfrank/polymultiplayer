@@ -94,10 +94,27 @@ writes `dist/site/`, which any static host can serve (for example
 `npx http-server dist/site` on the Pi behind the same Cloudflare tunnel).
 `npm run e2e:site` smoke-tests a build in headless Chromium.
 
-Keep in mind that, exactly like PolyModLoader itself, the copy redistributes
-PolyTrack's game files, which belong to Kodub, and that the official online
-features (leaderboards, invite-code multiplayer) only work from the official PML
-hosts unless you also add their PolyProxy mod.
+The copy skips PolyTrack's first-launch tutorial; instead the mod asks new
+players once to visit the Garage and pick a nickname and car.
+
+### Leaderboards and the game's own multiplayer on the copy
+
+PolyTrack's servers (leaderboards, the invite-code multiplayer) only answer
+requests coming from known hosts, so on a self-hosted copy creating an invite
+fails. The ranked server can forward those requests with the `Origin` header the
+PolyModLoader desktop app uses:
+
+1. In `server/config.json` set `"kodubProxy": { "enabled": true }` and restart
+   the server; `/health` then reports `"kodubProxy": "/kodub"`.
+2. Build the copy with `POLYRANKED_KODUB_PROXY=https://your-server/kodub`
+   (GitHub Pages: Actions variable `POLYRANKED_KODUB_PROXY`). Every
+   `vps.kodub.com` call in the game bundle is rewritten to that URL.
+
+This is the same header rewrite PolyModLoader's own app and PolyProxy mod do,
+but it is still a workaround for a restriction Kodub put in place: use it for a
+private group, not for a public mirror. Keep in mind that, exactly like
+PolyModLoader itself, the copy redistributes PolyTrack's game files, which belong
+to Kodub.
 
 ## Development
 

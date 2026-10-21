@@ -91,6 +91,18 @@ export const DEFAULT_CONFIG = {
   tracks: OFFICIAL_TRACKS,
   /** Same track for the whole match (Trackmania ranked) or a new one every round. */
   trackPerRound: false,
+  /**
+   * Opt-in proxy for PolyTrack's official backend so a self-hosted game copy keeps leaderboards and
+   * the game's own invite-code multiplayer (see server/src/kodubproxy.js). Build the copy with
+   * POLYRANKED_KODUB_PROXY=https://<this server>/kodub to use it.
+   */
+  kodubProxy: {
+    enabled: false,
+    path: "/kodub",
+    upstream: "https://vps.kodub.com",
+    /** Origin header sent upstream; the default is the one PolyModLoader's desktop app uses. */
+    origin: "https://app-polytrack-desktop.polymodloader.com",
+  },
 };
 
 export function deepMerge(base, override) {

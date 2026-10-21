@@ -74,7 +74,11 @@ const rankedAddr = await ranked.listen();
 const wsUrl = `ws://127.0.0.1:${rankedAddr.port}`;
 
 const siteDir = fs.mkdtempSync(path.join(os.tmpdir(), "polyranked-site-"));
-execFileSync(process.execPath, [path.join(root, "tools/build-site.mjs"), "--pml-dir", pmlDir, "--out", siteDir], { stdio: "inherit", env: { ...process.env, POLYRANKED_DEFAULT_SERVER: wsUrl } });
+const proxyBase = `http://127.0.0.1:${rankedAddr.port}/kodub`;
+execFileSync(process.execPath, [path.join(root, "tools/build-site.mjs"), "--pml-dir", pmlDir, "--out", siteDir], { stdio: "inherit", env: { ...process.env, POLYRANKED_DEFAULT_SERVER: wsUrl, POLYRANKED_KODUB_PROXY: proxyBase } });
+const builtBundle = fs.readFileSync(path.join(siteDir, "main.bundle.js"), "utf8");
+check("built copy has no tutorial startup action", !builtBundle.includes(': { type: "tutorial" };') && builtBundle.includes("no first-launch tutorial"));
+check("built copy routes PolyTrack's backend through the proxy", !builtBundle.includes('"https://vps.kodub.com/"') && builtBundle.split(JSON.stringify(proxyBase + "/")).length - 1 >= 10);
 const site = await staticServer(siteDir);
 const siteUrl = `http://127.0.0.1:${site.port}/`;
 console.log(`site: ${siteUrl}  ws: ${wsUrl}`);
@@ -114,6 +118,13 @@ try {
   await page.goto(siteUrl + "index.html");
 
   await waitFor("mod booted", () => page.evaluate(() => !!globalThis.polyRanked), 180000, 500);
+  const firstState = await page.evaluate(() => {
+    const app = globalThis.polyRanked;
+    const classes = app.bridge.getStateClasses();
+    const state = app.bridge.getState();
+    return state instanceof classes.MainMenu ? "menu" : state instanceof classes.InGame ? "ingame" : "other";
+  });
+  check("fresh profile starts in the main menu, not the tutorial", firstState === "menu", firstState);
   const mods = await page.evaluate(() => JSON.parse(localStorage.getItem("polyMods") || "[]"));
   check("loader registered the built-in mod on a fresh profile", mods.some((m) => m.base === new URL("mod", siteUrl).href.replace(/\/+$/, "") && m.loaded), JSON.stringify(mods));
   const pml = await page.evaluate(() => ({ version: window.pmlversion, mods: window.polyModLoader.getAllMods().map((m) => `${m.modID}@${m.modVersion}:${m.isLoaded}`) }));
@@ -124,13 +135,24 @@ try {
   await waitFor("connected", () => page.evaluate(() => globalThis.polyRanked.client.state === "ready"), 60000);
   const url = await page.evaluate(() => globalThis.polyRanked.settings.serverUrl);
   check("mod connected to the baked-in default server", url === wsUrl, url);
-  await page.evaluate(() => {
-    const app = globalThis.polyRanked;
-    if (!(app.bridge.getState() instanceof app.bridge.getStateClasses().MainMenu)) app.bridge.backToMenu(false, null);
-  });
   await waitFor("ranked button", () => page.evaluate(() => !!document.querySelector(".polyranked-menu-button")), 60000);
   check("Ranked button present in the main menu", true);
-  await page.screenshot({ path: path.join(artifacts, "site-main-menu.png") });
+  const prompt = await waitFor("garage prompt", () => page.evaluate(() => {
+    const dialog = document.querySelector("dialog.message-box-ui");
+    return dialog && globalThis.polyRanked.bridge.popups.isOpen ? dialog.innerText : null;
+  }), 20000);
+  check("new players are asked to visit the Garage", /Garage/.test(prompt) && /Later/.test(prompt), prompt.replace(/\s+/g, " ").slice(0, 120));
+  await page.screenshot({ path: path.join(artifacts, "site-garage-prompt.png") });
+  await page.click("dialog.message-box-ui button:has-text('Go to Garage')");
+  await waitFor("garage opened", () => page.evaluate(() => {
+    const app = globalThis.polyRanked;
+    const classes = app.bridge.getStateClasses();
+    const state = app.bridge.getState();
+    return !(state instanceof classes.MainMenu) && !(state instanceof classes.InGame);
+  }), 30000);
+  check("'Go to Garage' opens the garage", true);
+  check("the prompt is remembered", await page.evaluate(() => localStorage.getItem("polyranked.garagePrompted") === "1"));
+  await page.screenshot({ path: path.join(artifacts, "site-garage.png") });
   const errors = logs.filter((l) => l.startsWith("[pageerror]"));
   check("no page errors", errors.length === 0, errors.slice(0, 2).join(" | ").slice(0, 200));
   exitCode = results.every(Boolean) ? 0 : 1;

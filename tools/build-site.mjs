@@ -12,6 +12,10 @@
  *    (added once; players can still unload it in the mod manager), and the version lookup
  *    uses a relative path so the copy also works from a sub-directory (GitHub Pages).
  *  - ./mod: the PolyRanked mod files, importing PolyTypes.js from the copy itself.
+ *  - main.bundle.js: the first-launch tutorial is skipped (the mod asks new players to visit the
+ *    Garage instead) and, when POLYRANKED_KODUB_PROXY=<url> is set, PolyTrack's backend
+ *    (leaderboards, invite-code multiplayer) is reached through that proxy (see
+ *    server/src/kodubproxy.js) because the official servers only accept known origins.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -110,6 +114,21 @@ const ensureBlock = `/* PolyRanked: the built-in mod is always in the list (adde
 loader = loader.slice(0, returnIdx) + ensureBlock + loader.slice(returnIdx);
 fs.writeFileSync(loaderPath, loader);
 
+// 4b. Patch the game bundle: no first-launch tutorial, optional backend proxy
+const bundleGamePath = path.join(outDir, "main.bundle.js");
+let game = fs.readFileSync(bundleGamePath, "utf8");
+game = assertReplace(game, ': { type: "tutorial" };', ": null; /* PolyRanked: no first-launch tutorial */", "tutorial startup action");
+const kodubProxy = (process.env.POLYRANKED_KODUB_PROXY ?? argValue("--kodub-proxy", "")).trim().replace(/\/+$/, "");
+let proxiedCalls = 0;
+if (kodubProxy) {
+  if (!/^https?:\/\//.test(kodubProxy)) throw new Error("POLYRANKED_KODUB_PROXY must be an http(s) URL, e.g. https://ranked.example.com/kodub");
+  const needle = '"https://vps.kodub.com/"';
+  proxiedCalls = game.split(needle).length - 1;
+  if (proxiedCalls === 0) throw new Error("patch anchor not found: vps.kodub.com");
+  game = game.split(needle).join(JSON.stringify(kodubProxy + "/"));
+}
+fs.writeFileSync(bundleGamePath, game);
+
 // 5. Build the mod straight into the copy (the repo's own version folder is left untouched),
 //    importing PolyTypes from the copy instead of the CDN
 const modOut = path.join(outDir, "mod");
@@ -128,7 +147,7 @@ fs.writeFileSync(bundlePath, bundle);
 fs.writeFileSync(path.join(outDir, ".nojekyll"), "");
 fs.writeFileSync(
   path.join(outDir, "polyranked-site.json"),
-  JSON.stringify({ builtAt: new Date().toISOString(), pmlCommit: PML_COMMIT, modVersion, defaultServer: process.env.POLYRANKED_DEFAULT_SERVER ?? "ws://localhost:8788" }, null, 2) + "\n",
+  JSON.stringify({ builtAt: new Date().toISOString(), pmlCommit: PML_COMMIT, modVersion, defaultServer: process.env.POLYRANKED_DEFAULT_SERVER ?? "ws://localhost:8788", kodubProxy: kodubProxy || null, tutorial: false }, null, 2) + "\n",
 );
 
 let total = 0;
@@ -136,4 +155,4 @@ const walk = (d) => {
   for (const e of fs.readdirSync(d, { withFileTypes: true })) e.isDirectory() ? walk(path.join(d, e.name)) : (total += fs.statSync(path.join(d, e.name)).size);
 };
 walk(outDir);
-console.log(`[site] built ${path.relative(root, outDir)} (${(total / 1024 / 1024).toFixed(1)} MB): PolyModLoader ${PML_COMMIT.slice(0, 7)} + PolyRanked ${modVersion}, default server ${process.env.POLYRANKED_DEFAULT_SERVER ?? "ws://localhost:8788"}`);
+console.log(`[site] built ${path.relative(root, outDir)} (${(total / 1024 / 1024).toFixed(1)} MB): PolyModLoader ${PML_COMMIT.slice(0, 7)} + PolyRanked ${modVersion}, default server ${process.env.POLYRANKED_DEFAULT_SERVER ?? "ws://localhost:8788"}, tutorial off${kodubProxy ? `, backend via ${kodubProxy} (${proxiedCalls} call sites)` : ""}`);

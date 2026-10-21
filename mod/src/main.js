@@ -91,7 +91,66 @@ class PolyRankedApp {
     window.addEventListener("keydown", this.onKeyDown);
     this.wire();
     if (this.settings.autoConnect !== false) this.client.connect();
+    this.scheduleGaragePrompt();
     log.info(`${MOD_NAME} ${MOD_VERSION} ready (server: ${this.settings.serverUrl})`);
+  }
+
+  /**
+   * New profiles race as "Anonymous" with a random car. Once the main menu is idle, ask once
+   * whether to visit the Garage to pick a nickname and car before playing ranked.
+   */
+  scheduleGaragePrompt() {
+    const KEY = "polyranked.garagePrompted";
+    let storage = null;
+    try {
+      storage = globalThis.localStorage;
+    } catch {
+      /* ignore */
+    }
+    if (storage?.getItem(KEY) || this.settings.nameOverride || typeof this.bridge.openGarage !== "function") return;
+    const needsName = () => {
+      try {
+        const p = this.bridge.profiles.getCurrentUserProfile();
+        return !p.nickname || p.nickname === "Anonymous";
+      } catch {
+        return false;
+      }
+    };
+    if (!needsName()) return;
+    let attempts = 0;
+    const timer = setInterval(() => {
+      if (++attempts > 600) return clearInterval(timer);
+      if (this.controller.active || this.menu.isOpen) return;
+      let ready = false;
+      try {
+        const state = this.bridge.getState();
+        const classes = this.bridge.getStateClasses();
+        ready = state instanceof classes.MainMenu && !this.bridge.popups.isOpen && !document.querySelector(".news-popup-ui") && !document.querySelector(".loading-screen");
+      } catch {
+        ready = false;
+      }
+      if (!ready) return;
+      clearInterval(timer);
+      if (!needsName()) return;
+      storage?.setItem(KEY, "1");
+      try {
+        this.bridge.popups.showConfirm(
+          "Welcome to ranked PolyTrack!\n\nYou are playing as \"Anonymous\" with a random car. Visit the Garage to pick your nickname and car first – other players will see them in matches.",
+          "Later",
+          "Go to Garage",
+          null,
+          () => {
+            try {
+              this.bridge.openGarage();
+            } catch (err) {
+              log.error("could not open the garage", err);
+            }
+          },
+        );
+      } catch (err) {
+        log.warn("garage prompt failed", err);
+      }
+    }, 500);
   }
 
   onGameLoad() {

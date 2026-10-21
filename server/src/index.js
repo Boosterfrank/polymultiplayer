@@ -10,6 +10,7 @@ import { Matchmaker } from "./matchmaking.js";
 import { Match, PHASE } from "./match.js";
 import { buildPool, pickTrack } from "./tracks.js";
 import { divisionFor } from "./rating.js";
+import { createKodubProxy } from "./kodubproxy.js";
 
 const MIME = {
   ".js": "application/javascript; charset=utf-8",
@@ -47,7 +48,10 @@ export function createServer(cfg, { log = console, storePath } = {}) {
 
   // ------------------------------------------------------------------ HTTP
 
+  const kodubProxy = cfg.kodubProxy?.enabled ? createKodubProxy(cfg.kodubProxy, { log }) : null;
+
   const httpServer = http.createServer((req, res) => {
+    if (kodubProxy && kodubProxy.handleHttp(req, res)) return;
     const url = new URL(req.url, "http://localhost");
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Headers", "*");
@@ -56,7 +60,7 @@ export function createServer(cfg, { log = console, storePath } = {}) {
       return res.end();
     }
     if (url.pathname === "/" || url.pathname === "/health") {
-      return json(res, 200, { ok: true, name: "polyranked", protocol: PROTOCOL_VERSION, online: connections.size, matches: matches.size, queues: queueIds.map((q) => matchmaker.status(q)) });
+      return json(res, 200, { ok: true, name: "polyranked", protocol: PROTOCOL_VERSION, online: connections.size, matches: matches.size, queues: queueIds.map((q) => matchmaker.status(q)), kodubProxy: kodubProxy ? kodubProxy.prefix : null });
     }
     if (url.pathname === "/api/queues") {
       return json(res, 200, { queues: queueInfo() });
@@ -111,7 +115,11 @@ export function createServer(cfg, { log = console, storePath } = {}) {
 
   // ------------------------------------------------------------------ WebSocket
 
-  const wss = new WebSocketServer({ server: httpServer, maxPayload: MAX_BIN_BYTES });
+  const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_BIN_BYTES });
+  httpServer.on("upgrade", (req, socket, head) => {
+    if (kodubProxy && kodubProxy.handleUpgrade(req, socket, head)) return;
+    wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
+  });
 
   class Conn {
     constructor(ws) {
@@ -428,6 +436,7 @@ export function createServer(cfg, { log = console, storePath } = {}) {
       for (const m of matches.values()) m.destroy();
       for (const ws of wss.clients) ws.terminate();
       wss.close();
+      kodubProxy?.close();
       store.close();
       return new Promise((resolve) => httpServer.close(() => resolve()));
     },
@@ -443,6 +452,7 @@ if (isMain) {
   server.listen().then((addr) => {
     console.log(`[polyranked] listening on ws://${addr.address}:${addr.port}  (queues: ${Object.keys(cfg.queues).join(", ")}, tracks: ${cfg.tracks.length})`);
     if (cfg.serveModFrom) console.log(`[polyranked] serving mod files from ${path.resolve(cfg.serveModFrom)} at http://localhost:${addr.port}/mod/`);
+    if (cfg.kodubProxy?.enabled) console.log(`[polyranked] proxying PolyTrack's backend at http://localhost:${addr.port}${cfg.kodubProxy.path} (origin ${cfg.kodubProxy.origin})`);
   });
   const shutdown = () => {
     console.log("[polyranked] shutting down");

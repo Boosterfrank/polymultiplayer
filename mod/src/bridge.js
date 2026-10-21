@@ -10,7 +10,7 @@ const ANCHOR_TOKEN = "ActivePolyModLoader.postInitMods();";
  * JavaScript inserted into the game's init function (PolyTrack 0.6.3 bundle), right after
  * PML's `postInitMods()` call, where the init function's locals are still in scope:
  *   $ = current game state, J = start game, K = back to main menu, S = user profiles,
- *   T = API client, R = popup manager, k = language, x = track registry, r = settings,
+ *   q = open the garage, T = API client, R = popup manager, k = language, x = track registry, r = settings,
  *   l = audio manager, o = state transition trigger, I = platform SDK.
  */
 const BRIDGE_CODE = `
@@ -21,6 +21,7 @@ try {
     setState: function (s) { $ = s; },
     startGame: J,
     backToMenu: K,
+    openGarage: q,
     profiles: S,
     api: T,
     popups: R,

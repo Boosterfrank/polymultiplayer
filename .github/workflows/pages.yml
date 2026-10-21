@@ -40,6 +40,8 @@ jobs:
       - run: node tools/build-site.mjs --out dist/site
         env:
           POLYRANKED_DEFAULT_SERVER: ${{ vars.POLYRANKED_SERVER || 'ws://localhost:8788' }}
+          # e.g. https://ranked.example.com/kodub when the server runs with kodubProxy.enabled
+          POLYRANKED_KODUB_PROXY: ${{ vars.POLYRANKED_KODUB_PROXY || '' }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist/site

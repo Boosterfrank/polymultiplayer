@@ -22,5 +22,11 @@
     "kPlacement": 40,
     "kNormal": 20,
     "placementMatches": 5
+  },
+  "kodubProxy": {
+    "enabled": false,
+    "path": "/kodub",
+    "upstream": "https://vps.kodub.com",
+    "origin": "https://app-polytrack-desktop.polymodloader.com"
   }
 }

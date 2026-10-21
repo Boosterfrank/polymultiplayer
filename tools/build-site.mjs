@@ -3,17 +3,22 @@
  * Builds a self-contained copy of the PolyModLoader web version with PolyRanked pre-installed.
  *
  *   node tools/build-site.mjs [--pml-dir <PolyModLoader checkout>] [--out dist/site]
+ *                             [--ranked-enabled] [--extra-mod <url>[=on|off]]...
  *
  * Without --pml-dir the pinned PolyModLoader commit is fetched into .cache/pml.
  * POLYRANKED_DEFAULT_SERVER=wss://... bakes the ranked server address into the mod.
+ * POLYRANKED_RANKED_ENABLED=1 (or --ranked-enabled) ships PolyRanked switched on; by default it is
+ * installed but off, so players enable it in the mod manager. POLYRANKED_EXTRA_MODS can list more
+ * mods to pre-install, comma separated (`<url>` or `<url>=off`).
  *
  * What the copy changes compared to upstream PolyModLoader:
- *  - PolyModLoader.js: the mod list always contains the PolyRanked mod served from ./mod
- *    (added once; players can still unload it in the mod manager), and the version lookup
- *    uses a relative path so the copy also works from a sub-directory (GitHub Pages).
+ *  - PolyModLoader.js: the mod list always contains the built-in mods (PolyRanked served from
+ *    ./mod, PolyCup from the PolyModLoader CDN); each is added once, players can still unload or
+ *    remove them in the mod manager. The version lookup uses a relative path so the copy also
+ *    works from a sub-directory (GitHub Pages).
  *  - ./mod: the PolyRanked mod files, importing PolyTypes.js from the copy itself.
- *  - main.bundle.js: the first-launch tutorial is skipped (the mod asks new players to visit the
- *    Garage instead) and, when POLYRANKED_KODUB_PROXY=<url> is set, PolyTrack's backend
+ *  - main.bundle.js: the first-launch tutorial is replaced by a one-time prompt to visit the Garage
+ *    and, when POLYRANKED_KODUB_PROXY=<url> is set, PolyTrack's backend
  *    (leaderboards, invite-code multiplayer) is reached through that proxy (see
  *    server/src/kodubproxy.js) because the official servers only accept known origins.
  */
@@ -35,6 +40,26 @@ const argValue = (flag, def) => {
 };
 const outDir = path.resolve(root, argValue("--out", "dist/site"));
 let pmlDir = argValue("--pml-dir", process.env.PML_DIR ?? null);
+const rankedEnabled = args.includes("--ranked-enabled") || /^(1|true|yes|on)$/i.test(process.env.POLYRANKED_RANKED_ENABLED ?? "");
+
+/**
+ * Mods the copy registers in every player's mod list. `__SELF__` is replaced at runtime with the
+ * copy's own URL. `match` substrings (case-insensitive) recognise entries players already added
+ * from elsewhere (e.g. the CDN URL of this repository) so nothing is registered twice.
+ */
+const BUILTIN_MODS = [
+  { base: "__SELF__/mod", loaded: rankedEnabled, match: ["boosterfrank/polymultiplayer", "__SELF__/mod"] },
+  { base: "https://cdn.polymodloader.com/gh/Prawnfoot05/PolyCup/main/dist", loaded: true, match: ["prawnfoot05/polycup"] },
+];
+const extraMods = [];
+for (let i = 0; i < args.length; i++) if (args[i] === "--extra-mod" && args[i + 1]) extraMods.push(args[++i]);
+for (const m of (process.env.POLYRANKED_EXTRA_MODS ?? "").split(",")) if (m.trim()) extraMods.push(m.trim());
+for (const spec of extraMods) {
+  const [url, flag] = spec.split("=");
+  const base = url.replace(/\/+$/, "");
+  if (!/^https?:\/\//.test(base)) throw new Error(`--extra-mod needs an http(s) URL: ${spec}`);
+  BUILTIN_MODS.push({ base, loaded: !/^(off|false|0|disabled)$/i.test(flag ?? "on"), match: [base] });
+}
 
 function run(cmd, cmdArgs, opts = {}) {
   return execFileSync(cmd, cmdArgs, { stdio: "inherit", ...opts });
@@ -95,20 +120,28 @@ if (storageStart === -1) throw new Error("patch anchor not found: getPolyModsSto
 const returnLine = 'return __classPrivateFieldGet(this, _PolyModLoaderImpl_polyModUrls, "f");';
 const returnIdx = loader.indexOf(returnLine, storageStart);
 if (returnIdx === -1) throw new Error("patch anchor not found: getPolyModsStorage return");
-const ensureBlock = `/* PolyRanked: the built-in mod is always in the list (added once; players may still unload it). */
+const ensureBlock = `/* PolyRanked: built-in mods are always in the list (added once; players may still unload or remove them). */
         try {
-            const polyRankedBase = new URL("mod", document.baseURI).href.replace(/\\/+$/, "");
-            const polyRankedKnown = ["boosterfrank/polymultiplayer", polyRankedBase];
+            const polyRankedSelf = new URL(".", document.baseURI).href.replace(/\\/+$/, "");
+            const polyRankedBuiltin = ${JSON.stringify(BUILTIN_MODS)};
             const polyRankedList = __classPrivateFieldGet(this, _PolyModLoaderImpl_polyModUrls, "f") || [];
-            const polyRankedPresent = polyRankedList.some((m) => m && typeof m.base === "string" && polyRankedKnown.some((k) => m.base.replace(/\\/+$/, "").includes(k)));
-            if (!polyRankedPresent) {
-                polyRankedList.push({ "base": polyRankedBase, "version": "latest", "loaded": true });
+            let polyRankedChanged = false;
+            for (const builtin of polyRankedBuiltin) {
+                const base = builtin.base.replace("__SELF__", polyRankedSelf);
+                const keys = builtin.match.map((k) => k.replace("__SELF__", polyRankedSelf).toLowerCase());
+                const present = polyRankedList.some((m) => m && typeof m.base === "string" && keys.some((k) => m.base.replace(/\\/+$/, "").toLowerCase().includes(k)));
+                if (!present) {
+                    polyRankedList.push({ "base": base, "version": "latest", "loaded": !!builtin.loaded });
+                    polyRankedChanged = true;
+                }
+            }
+            if (polyRankedChanged) {
                 __classPrivateFieldSet(this, _PolyModLoaderImpl_polyModUrls, polyRankedList, "f");
                 this.localStorage?.setItem("polyMods", JSON.stringify(polyRankedList));
             }
         }
         catch (polyRankedErr) {
-            console.warn("[PolyRanked] could not register the built-in mod", polyRankedErr);
+            console.warn("[PolyRanked] could not register the built-in mods", polyRankedErr);
         }
         `;
 loader = loader.slice(0, returnIdx) + ensureBlock + loader.slice(returnIdx);
@@ -117,7 +150,36 @@ fs.writeFileSync(loaderPath, loader);
 // 4b. Patch the game bundle: no first-launch tutorial, optional backend proxy
 const bundleGamePath = path.join(outDir, "main.bundle.js");
 let game = fs.readFileSync(bundleGamePath, "utf8");
-game = assertReplace(game, ': { type: "tutorial" };', ": null; /* PolyRanked: no first-launch tutorial */", "tutorial startup action");
+game = assertReplace(game, ': { type: "tutorial" };', ': { type: "polyranked-garage" }; /* PolyRanked: Garage prompt instead of the tutorial */', "tutorial startup action");
+// In the main menu's startup switch, `s` = user profiles, `f` = popup manager, `m` = open the garage.
+game = assertReplace(
+  game,
+  'case "tutorial": {',
+  `case "polyranked-garage": {
+                                  /* PolyRanked: the first-launch tutorial is replaced by a one-time Garage reminder */
+                                  try {
+                                    const polyRankedKey = "polyranked.garagePrompted";
+                                    let polyRankedSeen = false;
+                                    try { polyRankedSeen = !!localStorage.getItem(polyRankedKey); } catch (polyRankedErr) {}
+                                    const polyRankedName = s.getCurrentUserProfile().nickname;
+                                    if (!polyRankedSeen && (!polyRankedName || polyRankedName === "Anonymous")) {
+                                      try { localStorage.setItem(polyRankedKey, "1"); } catch (polyRankedErr) {}
+                                      f.showConfirm(
+                                        "Welcome to PolyTrack!\\n\\nYou are playing as \\"Anonymous\\" with a random car. Visit the Garage to pick your nickname and car first \\u2013 other players will see them.",
+                                        "Later",
+                                        "Go to Garage",
+                                        null,
+                                        () => { m(); },
+                                      );
+                                    }
+                                  } catch (polyRankedErr) {
+                                    console.warn("[PolyRanked] garage prompt failed", polyRankedErr);
+                                  }
+                                  break;
+                                }
+                                case "tutorial": {`,
+  "tutorial case",
+);
 const kodubProxy = (process.env.POLYRANKED_KODUB_PROXY ?? argValue("--kodub-proxy", "")).trim().replace(/\/+$/, "");
 let proxiedCalls = 0;
 if (kodubProxy) {
@@ -147,7 +209,7 @@ fs.writeFileSync(bundlePath, bundle);
 fs.writeFileSync(path.join(outDir, ".nojekyll"), "");
 fs.writeFileSync(
   path.join(outDir, "polyranked-site.json"),
-  JSON.stringify({ builtAt: new Date().toISOString(), pmlCommit: PML_COMMIT, modVersion, defaultServer: process.env.POLYRANKED_DEFAULT_SERVER ?? "ws://localhost:8788", kodubProxy: kodubProxy || null, tutorial: false }, null, 2) + "\n",
+  JSON.stringify({ builtAt: new Date().toISOString(), pmlCommit: PML_COMMIT, modVersion, defaultServer: process.env.POLYRANKED_DEFAULT_SERVER ?? "ws://localhost:8788", kodubProxy: kodubProxy || null, tutorial: false, builtinMods: BUILTIN_MODS.map((m) => ({ base: m.base, loaded: m.loaded })) }, null, 2) + "\n",
 );
 
 let total = 0;
@@ -155,4 +217,4 @@ const walk = (d) => {
   for (const e of fs.readdirSync(d, { withFileTypes: true })) e.isDirectory() ? walk(path.join(d, e.name)) : (total += fs.statSync(path.join(d, e.name)).size);
 };
 walk(outDir);
-console.log(`[site] built ${path.relative(root, outDir)} (${(total / 1024 / 1024).toFixed(1)} MB): PolyModLoader ${PML_COMMIT.slice(0, 7)} + PolyRanked ${modVersion}, default server ${process.env.POLYRANKED_DEFAULT_SERVER ?? "ws://localhost:8788"}, tutorial off${kodubProxy ? `, backend via ${kodubProxy} (${proxiedCalls} call sites)` : ""}`);
+console.log(`[site] built ${path.relative(root, outDir)} (${(total / 1024 / 1024).toFixed(1)} MB): PolyModLoader ${PML_COMMIT.slice(0, 7)} + PolyRanked ${modVersion}, default server ${process.env.POLYRANKED_DEFAULT_SERVER ?? "ws://localhost:8788"}, tutorial off, ranked ${rankedEnabled ? "on" : "off"} by default, built-in mods: ${BUILTIN_MODS.map((m) => m.base.replace("__SELF__", ".")).join(" ")}${kodubProxy ? `, backend via ${kodubProxy} (${proxiedCalls} call sites)` : ""}`);

@@ -17,6 +17,11 @@ export function createKodubProxy(cfg, { log = console } = {}) {
   const upstream = new URL(cfg.upstream ?? "https://vps.kodub.com");
   const origin = cfg.origin ?? "https://app-polytrack-desktop.polymodloader.com";
   const wss = new WebSocketServer({ noServer: true });
+  const stats = { httpRequests: 0, httpErrors: 0, wsConnections: 0, wsRejected: 0, lastError: null };
+  const note = (err) => {
+    stats.lastError = { at: new Date().toISOString(), error: err };
+    log.warn?.("[kodub-proxy]", err);
+  };
 
   const matches = (url) => url === prefix || url.startsWith(prefix + "/") || url.startsWith(prefix + "?");
 
@@ -48,7 +53,12 @@ export function createKodubProxy(cfg, { log = console } = {}) {
     }
     const target = upstreamUrl(req.url);
     const client = target.protocol === "https:" ? https : http;
+    stats.httpRequests++;
     const proxied = client.request(target, { method: req.method, headers: forwardHeaders(req), timeout: 30000 }, (up) => {
+      if ((up.statusCode ?? 500) >= 400) {
+        stats.httpErrors++;
+        note(`upstream answered ${up.statusCode} for ${req.method} ${target.pathname}`);
+      }
       const headers = {};
       for (const name of ["content-type", "content-length", "cache-control", "content-encoding"]) {
         if (up.headers[name]) headers[name] = up.headers[name];
@@ -58,7 +68,8 @@ export function createKodubProxy(cfg, { log = console } = {}) {
     });
     proxied.on("timeout", () => proxied.destroy(new Error("upstream timeout")));
     proxied.on("error", (err) => {
-      log.warn?.("[kodub-proxy] upstream error", err.message);
+      stats.httpErrors++;
+      note(`upstream request failed: ${err.message}`);
       if (!res.headersSent) res.writeHead(502, { "Content-Type": "text/plain" });
       res.end("upstream error");
     });
@@ -71,9 +82,16 @@ export function createKodubProxy(cfg, { log = console } = {}) {
     if (!matches(req.url)) return false;
     const target = upstreamUrl(req.url);
     target.protocol = target.protocol === "http:" ? "ws:" : "wss:";
+    stats.wsConnections++;
     const up = new WebSocket(target, { headers: { Origin: origin }, handshakeTimeout: 15000 });
     let client = null;
     const pending = [];
+    up.on("unexpected-response", (_req, res) => {
+      stats.wsRejected++;
+      note(`upstream rejected websocket ${target.pathname} with HTTP ${res.statusCode} (origin ${origin})`);
+      res.resume();
+      socket.destroy();
+    });
     up.on("open", () => {
       wss.handleUpgrade(req, socket, head, (ws) => {
         client = ws;
@@ -95,7 +113,8 @@ export function createKodubProxy(cfg, { log = console } = {}) {
       else socket.destroy();
     });
     up.on("error", (err) => {
-      log.warn?.("[kodub-proxy] upstream websocket error", err.message);
+      if (!client) stats.wsRejected++;
+      note(`upstream websocket error: ${err.message}`);
       if (client) closeClient(1011, "upstream error");
       else socket.destroy();
     });
@@ -121,5 +140,5 @@ export function createKodubProxy(cfg, { log = console } = {}) {
     return true;
   }
 
-  return { prefix, upstream: upstream.href, origin, handleHttp, handleUpgrade, close: () => wss.close() };
+  return { prefix, upstream: upstream.href, origin, stats, handleHttp, handleUpgrade, close: () => wss.close() };
 }

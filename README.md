@@ -76,9 +76,16 @@ also works (see `server/Dockerfile`).
 ## Your own game copy with PolyRanked built in
 
 `tools/build-site.mjs` produces a self-contained copy of the PolyModLoader web
-version (pinned to the 0.6.3 build this mod targets) in which the loader always
-registers PolyRanked, served from the copy itself. Players who open that URL get
-the mod without touching the mod manager; they can still unload it there.
+version (pinned to the 0.6.3 build this mod targets) in which the loader
+registers a set of built-in mods in every player's mod list:
+
+* **PolyRanked**, served from the copy itself, installed but **switched off by
+  default** (players enable it under *Mods* in the main menu; build with
+  `POLYRANKED_RANKED_ENABLED=1` or `--ranked-enabled` to ship it on);
+* **PolyCup** (`https://cdn.polymodloader.com/gh/Prawnfoot05/PolyCup/main/dist`), on;
+* anything else you pass with `--extra-mod <url>[=off]` or `POLYRANKED_EXTRA_MODS`.
+
+Each entry is added once; players can still unload or remove them.
 
 Publishing it on GitHub Pages (free, stable URL):
 
@@ -94,8 +101,9 @@ writes `dist/site/`, which any static host can serve (for example
 `npx http-server dist/site` on the Pi behind the same Cloudflare tunnel).
 `npm run e2e:site` smoke-tests a build in headless Chromium.
 
-The copy skips PolyTrack's first-launch tutorial; instead the mod asks new
-players once to visit the Garage and pick a nickname and car.
+The copy skips PolyTrack's first-launch tutorial; instead new players (nickname
+still "Anonymous") are asked once to visit the Garage and pick a nickname and
+car. The prompt is built into the copy, so it works even with PolyRanked off.
 
 ### Leaderboards and the game's own multiplayer on the copy
 
@@ -105,7 +113,10 @@ fails. The ranked server can forward those requests with the `Origin` header the
 PolyModLoader desktop app uses:
 
 1. In `server/config.json` set `"kodubProxy": { "enabled": true }` and restart
-   the server; `/health` then reports `"kodubProxy": "/kodub"`.
+   the server; `/health` then shows a `kodubProxy` section with request counts
+   and the last upstream error (for example `upstream rejected websocket
+   /v6/multiplayer/host with HTTP 403`), which tells you whether Kodub's server
+   accepted the configured `origin`.
 2. Build the copy with `POLYRANKED_KODUB_PROXY=https://your-server/kodub`
    (GitHub Pages: Actions variable `POLYRANKED_KODUB_PROXY`). Every
    `vps.kodub.com` call in the game bundle is rewritten to that URL.

@@ -48,7 +48,8 @@ test("kodub proxy forwards HTTP and WebSocket traffic with the configured Origin
   try {
     // health still works and reports the proxy
     const health = await (await fetch(`${base}/health`)).json();
-    assert.equal(health.kodubProxy, "/kodub");
+    assert.equal(health.kodubProxy.path, "/kodub");
+    assert.equal(health.kodubProxy.origin, ORIGIN);
 
     // HTTP GET with query string
     const res = await fetch(`${base}/kodub/v6/leaderboard?version=0.6.3&trackId=abc`, { headers: { Origin: "https://some-copy.github.io" } });
@@ -91,6 +92,26 @@ test("kodub proxy forwards HTTP and WebSocket traffic with the configured Origin
       ranked.on("error", reject);
     });
     ranked.close();
+
+    // a rejected upstream websocket is reported in /health
+    const bad = await fakeUpstream("https://someone-else.example");
+    const cfg2 = testConfig({ port: 0, host: "127.0.0.1", kodubProxy: { enabled: true, path: "/kodub", upstream: bad.url, origin: ORIGIN } });
+    const server2 = createServer(cfg2, { log: { info() {}, warn() {}, error: console.error }, storePath: null });
+    const addr2 = await server2.listen();
+    try {
+      const rejected = new WebSocket(`ws://127.0.0.1:${addr2.port}/kodub/v6/multiplayer/host`);
+      await new Promise((resolve) => {
+        rejected.on("error", resolve);
+        rejected.on("close", resolve);
+      });
+      const h2 = await (await fetch(`http://127.0.0.1:${addr2.port}/health`)).json();
+      assert.equal(h2.kodubProxy.wsRejected, 1);
+      assert.match(h2.kodubProxy.lastError.error, /HTTP 403/);
+    } finally {
+      await server2.close();
+      bad.wss.close();
+      bad.srv.close();
+    }
   } finally {
     await server.close();
     up.wss.close();

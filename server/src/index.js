@@ -60,7 +60,7 @@ export function createServer(cfg, { log = console, storePath } = {}) {
       return res.end();
     }
     if (url.pathname === "/" || url.pathname === "/health") {
-      return json(res, 200, { ok: true, name: "polyranked", protocol: PROTOCOL_VERSION, online: connections.size, matches: matches.size, queues: queueIds.map((q) => matchmaker.status(q)), kodubProxy: kodubProxy ? kodubProxy.prefix : null });
+      return json(res, 200, { ok: true, name: "polyranked", protocol: PROTOCOL_VERSION, online: connections.size, matches: matches.size, queues: queueIds.map((q) => matchmaker.status(q)), kodubProxy: kodubProxy ? { path: kodubProxy.prefix, origin: kodubProxy.origin, ...kodubProxy.stats } : null });
     }
     if (url.pathname === "/api/queues") {
       return json(res, 200, { queues: queueInfo() });

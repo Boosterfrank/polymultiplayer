@@ -107,5 +107,8 @@ manifest.json, 0.1.0/        PML install layout (install URL = repo root)
 mod/src/                     mod source (bundled with esbuild into 0.1.0/main.mod.js)
 shared/protocol.js           message names + binary framing shared by mod and server
 server/                      Node.js server (`npm start`), tests (`npm test`)
+mods/                        third-party mods ported to 0.6.3 for the game copy (see mods/README.md)
+tools/build-site.mjs         builds the self-contained game copy with all built-in mods
+test/e2e/                    headless-Chromium tests against the real game build
 docs/                        this file, PROTOCOL.md
 ```

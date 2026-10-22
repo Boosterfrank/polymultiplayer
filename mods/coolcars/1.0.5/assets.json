@@ -1,0 +1,70 @@
+{
+  "_comment": "Car models of the upstream mod. tools/build-site.mjs downloads them (SHA-256 verified) into <version>/assets/ when building the game copy; they are not committed to this repository.",
+  "source": {
+    "repository": "https://github.com/CRJakob/jakobspolymods",
+    "commit": "b3ae1555d5e3f0c3e9e539ba8e8c0e0add113545",
+    "path": "coolcars/1.0.4/assets"
+  },
+  "files": [
+    {
+      "file": "audir8.glb",
+      "size": 3039280,
+      "sha256": "6d97417db16adffbdb628d05fcd66ea61b246adecd04c0c50baec3e87a20fd7d",
+      "url": "https://raw.githubusercontent.com/CRJakob/jakobspolymods/b3ae1555d5e3f0c3e9e539ba8e8c0e0add113545/coolcars/1.0.4/assets/audir8.glb"
+    },
+    {
+      "file": "countach.glb",
+      "size": 3220388,
+      "sha256": "b40fe8689fc6429f9c2402c7386fbc0ad1b4b21bd6beaa5c369293b2dd76a244",
+      "url": "https://raw.githubusercontent.com/CRJakob/jakobspolymods/b3ae1555d5e3f0c3e9e539ba8e8c0e0add113545/coolcars/1.0.4/assets/countach.glb"
+    },
+    {
+      "file": "cybertruck.glb",
+      "size": 131716,
+      "sha256": "26a4d87f9ca6dd61d7c3ec6947ebc6bf34bafffb82f3cba8c073abda203df58a",
+      "url": "https://raw.githubusercontent.com/CRJakob/jakobspolymods/b3ae1555d5e3f0c3e9e539ba8e8c0e0add113545/coolcars/1.0.4/assets/cybertruck.glb"
+    },
+    {
+      "file": "driftcar.glb",
+      "size": 8598848,
+      "sha256": "eeac82a48b4a46ff5784b7ce53248e17e5d53e63804b3a9f9f7606ffd8593a2f",
+      "url": "https://raw.githubusercontent.com/CRJakob/jakobspolymods/b3ae1555d5e3f0c3e9e539ba8e8c0e0add113545/coolcars/1.0.4/assets/driftcar.glb"
+    },
+    {
+      "file": "koenigsegg.glb",
+      "size": 1201060,
+      "sha256": "64794da9325d2d90537c5887f0c7a9b693bb3939870e1e55caf3298bc8f2bfa3",
+      "url": "https://raw.githubusercontent.com/CRJakob/jakobspolymods/b3ae1555d5e3f0c3e9e539ba8e8c0e0add113545/coolcars/1.0.4/assets/koenigsegg.glb"
+    },
+    {
+      "file": "mclaren.glb",
+      "size": 37243228,
+      "sha256": "53d0d8c9c15ca6fd1174e873a331b4ea363c463d206165eb31feff799cb8c3f3",
+      "url": "https://raw.githubusercontent.com/CRJakob/jakobspolymods/b3ae1555d5e3f0c3e9e539ba8e8c0e0add113545/coolcars/1.0.4/assets/mclaren.glb"
+    },
+    {
+      "file": "mclarenmp4_5.glb",
+      "size": 96324656,
+      "sha256": "2ead2bab776b7dbb7b463d64c9e5bf025b4455e2881ea8e31d64053e9d929bd5",
+      "url": "https://raw.githubusercontent.com/CRJakob/jakobspolymods/b3ae1555d5e3f0c3e9e539ba8e8c0e0add113545/coolcars/1.0.4/assets/mclarenmp4_5.glb"
+    },
+    {
+      "file": "nissan.glb",
+      "size": 18995388,
+      "sha256": "574c51946401397d87b05f7c1cd449f8346532da7972ed6ed3734bb57c997fdd",
+      "url": "https://raw.githubusercontent.com/CRJakob/jakobspolymods/b3ae1555d5e3f0c3e9e539ba8e8c0e0add113545/coolcars/1.0.4/assets/nissan.glb"
+    },
+    {
+      "file": "octane.glb",
+      "size": 1290040,
+      "sha256": "895850c50fd8e6964a68e7c77211a1aa635abbcf7481e9acf0493ec4214d0868",
+      "url": "https://raw.githubusercontent.com/CRJakob/jakobspolymods/b3ae1555d5e3f0c3e9e539ba8e8c0e0add113545/coolcars/1.0.4/assets/octane.glb"
+    },
+    {
+      "file": "svj.glb",
+      "size": 5150408,
+      "sha256": "7a5364ce7e5cb87533fd6ec867df1416fd0789db8be98ac3f332a19fe2b97fa4",
+      "url": "https://raw.githubusercontent.com/CRJakob/jakobspolymods/b3ae1555d5e3f0c3e9e539ba8e8c0e0add113545/coolcars/1.0.4/assets/svj.glb"
+    }
+  ]
+}

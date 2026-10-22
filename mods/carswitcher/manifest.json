@@ -1,0 +1,8 @@
+{
+    "name": "Car Switcher",
+    "id": "carswitcher",
+    "author": "Orangy (0.6.3 port)",
+    "latest": {
+        "0.6.3": "1.0.8"
+    }
+}

@@ -83,9 +83,22 @@ registers a set of built-in mods in every player's mod list:
   default** (players enable it under *Mods* in the main menu; build with
   `POLYRANKED_RANKED_ENABLED=1` or `--ranked-enabled` to ship it on);
 * **PolyCup** (`https://cdn.polymodloader.com/gh/Prawnfoot05/PolyCup/main/dist`), on;
+* **Car Switcher**, **Cool Cars** and **Goofy Cars**, ported to PolyTrack 0.6.3
+  in [`mods/`](mods/README.md) and served from the copy, on. They add a
+  *Select Car* button to the Garage with 26 car models (Orangy's Car Switcher
+  cars plus CRJakob's two packs). The car models (~260 MB) are downloaded from
+  the upstream repositories while the copy is built, not stored in this
+  repository;
 * anything else you pass with `--extra-mod <url>[=off]` or `POLYRANKED_EXTRA_MODS`.
 
 Each entry is added once; players can still unload or remove them.
+
+A car only counts as a physics change when its collision model differs from the
+vanilla car (the game checks that with a checksum), so with the usual cars
+PolyModLoader keeps reporting vanilla physics and ranked play stays available.
+Custom engine sounds (Pingu, Minecart) need the PML API mod; add it with
+`--extra-mod https://cdn.polymodloader.com/pml/PolyModLoader/pmlapi/dist` if
+you want them.
 
 Publishing it on GitHub Pages (free, stable URL):
 
@@ -98,8 +111,10 @@ Publishing it on GitHub Pages (free, stable URL):
 
 Building it yourself: `POLYRANKED_DEFAULT_SERVER=wss://… npm run build:site`
 writes `dist/site/`, which any static host can serve (for example
-`npx http-server dist/site` on the Pi behind the same Cloudflare tunnel).
-`npm run e2e:site` smoke-tests a build in headless Chromium.
+`npx http-server dist/site` on the Pi behind the same Cloudflare tunnel). The
+first build downloads the car models into `.cache/mod-assets/` (behind an HTTP
+proxy run it with `NODE_USE_ENV_PROXY=1`). `npm run e2e:site` smoke-tests a
+build in headless Chromium.
 
 The copy skips PolyTrack's first-launch tutorial; instead new players (nickname
 still "Anonymous") are asked once to visit the Garage and pick a nickname and
@@ -151,3 +166,7 @@ in [docs/DESIGN.md](docs/DESIGN.md); the message format in
 PolyTrack is made by [Kodub](https://www.kodub.com). PolyModLoader is a
 community project; this mod only uses its public API and the game's own
 multiplayer plumbing. PolyRanked is not affiliated with either.
+
+The game copy bundles ports of **Car Switcher** by Orangy and **Cool Cars** /
+**Goofy Cars** by CRJakob (see [mods/README.md](mods/README.md) for the sources,
+what the ports change and the licensing situation).

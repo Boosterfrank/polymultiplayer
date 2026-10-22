@@ -5,10 +5,13 @@
  *   node test/e2e/site-smoke.mjs [--pml-dir <PolyModLoader checkout>]
  *
  * Page 1 is a brand-new profile: the loader must register the built-in mods (PolyRanked off,
- * PolyCup on), the copy must skip the tutorial and show the Garage prompt instead.
- * Page 2 is a profile that enabled PolyRanked: the mod must boot, connect to the baked-in server
- * and add its menu button. pmlcore and PolyCup (loaded from the PolyModLoader CDN) are replaced
- * with stubs because the test runs offline; everything else is the real game.
+ * PolyCup and the ported car mods on), the copy must skip the tutorial and show the Garage prompt
+ * instead, and the Garage must offer the ported Car Switcher with all cars (selecting a 0.5-era
+ * car must load it with the vanilla collision hull).
+ * Page 2 is a profile that enabled PolyRanked and saved a car: the mod must boot, connect to the
+ * baked-in server and add its menu button, and Car Switcher must restore the saved car with its
+ * wheel positions. pmlcore and PolyCup (loaded from the PolyModLoader CDN) are replaced with stubs
+ * because the test runs offline; everything else is the real game.
  */
 import fs from "node:fs";
 import http from "node:http";
@@ -84,6 +87,7 @@ const site = await staticServer(siteDir);
 const siteUrl = `http://127.0.0.1:${site.port}/`;
 const selfModBase = `${siteUrl}mod`;
 const POLYCUP_BASE = "https://cdn.polymodloader.com/gh/Prawnfoot05/PolyCup/main/dist";
+const PORTED = ["carswitcher", "coolcars", "goofycars"];
 console.log(`site: ${siteUrl}  ws: ${wsUrl}`);
 
 const stubFor = (id, name) => ({
@@ -143,14 +147,17 @@ try {
   // ---------------------------------------------------------------- page 1: brand-new profile
   const fresh = await openPage("fresh");
   pages.push(fresh);
-  await waitFor("fresh: mods imported", () => fresh.page.evaluate(() => window.polyModLoader?.getAllMods?.().length >= 3), 180000, 500);
+  await waitFor("fresh: mods imported", () => fresh.page.evaluate(() => window.polyModLoader?.getAllMods?.().length >= 6), 180000, 500);
   const mods = await fresh.page.evaluate(() => JSON.parse(localStorage.getItem("polyMods") || "[]"));
   const rankedEntry = mods.find((m) => m.base === selfModBase);
   const cupEntry = mods.find((m) => m.base === POLYCUP_BASE);
   check("fresh: PolyRanked registered but not loaded", !!rankedEntry && rankedEntry.loaded === false, JSON.stringify(rankedEntry));
   check("fresh: PolyCup registered and loaded", !!cupEntry && cupEntry.loaded === true, JSON.stringify(cupEntry));
+  const carMods = PORTED.map((id) => mods.find((m) => m.base === `${siteUrl}mods/${id}`));
+  check("fresh: Car Switcher, Cool Cars and Goofy Cars registered from the copy and loaded", carMods.every((m) => m && m.loaded === true), JSON.stringify(carMods));
   const loaded = await fresh.page.evaluate(() => window.polyModLoader.getAllMods().map((m) => `${m.modID}:${m.isLoaded}`));
   check("fresh: pmlcore and polycup active, polyranked present but inactive", loaded.includes("pmlcore:true") && loaded.includes("polytrack-world-cup:true") && loaded.includes("polyranked:false"), loaded.join(", "));
+  check("fresh: the ported car mods are active", PORTED.every((id) => loaded.includes(`${id}:true`)), loaded.join(", "));
   const prompt = await waitFor("fresh: garage prompt", () => fresh.page.evaluate(() => {
     const dialog = document.querySelector("dialog.message-box-ui");
     return dialog && dialog.open ? dialog.innerText : null;
@@ -166,29 +173,63 @@ try {
   check("fresh: 'Go to Garage' leaves the main menu", !/Ranked 1v1|Multiplayer\s+Play/.test(garageText) && /Back|Save|Nickname|Garage|Name/i.test(garageText), garageText.slice(0, 120));
   check("fresh: the prompt is remembered", await fresh.page.evaluate(() => localStorage.getItem("polyranked.garagePrompted") === "1"));
 
+  // Car Switcher in the Garage
+  await waitFor("fresh: Select Car button", () => fresh.page.evaluate(() => !!document.querySelector(".customization-ui > .top .carswitcher-button")), 30000);
+  check("fresh: Car Switcher adds its button to the Garage's top bar", true);
+  await fresh.page.click(".carswitcher-button");
+  const carNames = await waitFor("fresh: car list", () => fresh.page.evaluate(() => {
+    const panel = document.querySelector(".carswitcher-panel");
+    return panel && !panel.hidden ? [...panel.querySelectorAll(".carswitcher-car")].map((b) => b.textContent.replace(/^▶ /, "")) : null;
+  }), 10000);
+  check("fresh: the car list has the 26 cars of all three mods", carNames.length === 26 && ["Poly Car", "Trackmania 2020", "Audi R8", "Mclaren F1", "Dababy Car", "Minecart"].every((n) => carNames.includes(n)), carNames.join(", "));
+  await fresh.page.screenshot({ path: path.join(artifacts, "site-garage-cars.png") });
+  const chassisBefore = await fresh.page.evaluate(() => window.polyModLoader.getMod("carswitcher").templateCarClass().models.chassis.uuid);
+  await fresh.page.click(".carswitcher-car:has-text('Checkpoint')");
+  const carStatus = await waitFor("fresh: car loaded", () => fresh.page.evaluate(() => {
+    const text = document.querySelector(".carswitcher-status")?.textContent ?? "";
+    return /ready|Could not/.test(text) ? text : null;
+  }), 60000, 200);
+  const car = await fresh.page.evaluate(() => {
+    const cs = window.polyModLoader.getMod("carswitcher");
+    return { active: cs.activeCar, touchingPhysics: cs.touchingPhysics, vanilla: window.polyModLoader.isVanillaCompatible(), saved: localStorage.getItem("MyCar"), chassis: cs.templateCarClass().models.chassis.uuid, wheelFR: cs.wheelPositions.wheelFR };
+  });
+  check("fresh: a Goofy Cars model (0.5 layout) loads into the game's car template", /ready/.test(carStatus) && car.active?.name === "Checkpoint" && car.active.legacy === true && car.chassis !== chassisBefore, carStatus.slice(0, 80));
+  check("fresh: its inherited 0.5 hull is swapped for the vanilla one, physics stay vanilla", car.active?.hullVanilla === true && car.active.collisionSource === "vanilla" && car.touchingPhysics === false && car.vanilla === true, JSON.stringify(car.active));
+  check("fresh: the choice is saved under the upstream key", typeof car.saved === "string" && car.saved.endsWith("/mods/goofycars/1.0.9/assets/checkpoint.glb"), car.saved);
+
   // ---------------------------------------------------------------- page 2: PolyRanked enabled
+  const savedCar = `${siteUrl}mods/carswitcher/1.0.8/assets/TMStadium.glb`;
   const enabled = await openPage("enabled", {
-    fn: ({ selfModBase, polycup }) => {
+    fn: ({ selfModBase, polycup, savedCar }) => {
       localStorage.setItem("polyMods", JSON.stringify([
         { base: "https://cdn.polymodloader.com/pml/PolyModLoader/pmlcore", version: "latest", loaded: true },
         { base: selfModBase, version: "latest", loaded: true },
         { base: polycup, version: "latest", loaded: true },
       ]));
       localStorage.setItem("polyranked.garagePrompted", "1");
+      localStorage.setItem("MyCar", savedCar);
+      localStorage.setItem("carSound", "audio/engine.mp3");
     },
-    arg: { selfModBase, polycup: POLYCUP_BASE },
+    arg: { selfModBase, polycup: POLYCUP_BASE, savedCar },
   });
   pages.push(enabled);
   await waitFor("enabled: mod booted", () => enabled.page.evaluate(() => !!globalThis.polyRanked), 180000, 500);
   const pml = await enabled.page.evaluate(() => ({ version: window.pmlversion, mods: window.polyModLoader.getAllMods().map((m) => `${m.modID}@${m.modVersion}:${m.isLoaded}`), polyMods: JSON.parse(localStorage.getItem("polyMods")).length }));
   check("enabled: PolyModLoader reports its version from the relative package.json", /^v0\.6\.3/.test(pml.version), pml.version);
-  check("enabled: all three mods loaded, nothing registered twice", pml.mods.some((m) => /^polyranked@0\.\d+\.\d+:true$/.test(m)) && pml.mods.includes("polytrack-world-cup@0.0.0:true") && pml.polyMods === 3, pml.mods.join(", "));
-  check("enabled: mod bundle uses the copy's own PolyTypes.js (no CDN import)", !enabled.logs.some((l) => l.includes("cdn.polymodloader.com/cb/")));
+  check("enabled: all six mods loaded, nothing registered twice", pml.mods.some((m) => /^polyranked@0\.\d+\.\d+:true$/.test(m)) && pml.mods.includes("polytrack-world-cup@0.0.0:true") && ["carswitcher@1.0.8:true", "coolcars@1.0.5:true", "goofycars@1.0.9:true"].every((m) => pml.mods.includes(m)) && pml.polyMods === 6, pml.mods.join(", "));
+  check("enabled: mod bundles use the copy's own PolyTypes.js (no CDN import)", !enabled.logs.some((l) => l.includes("cdn.polymodloader.com/cb/")));
   await waitFor("enabled: connected", () => enabled.page.evaluate(() => globalThis.polyRanked.client.state === "ready"), 60000);
   check("enabled: mod connected to the baked-in default server", await enabled.page.evaluate(() => globalThis.polyRanked.settings.serverUrl) === wsUrl);
   await waitFor("enabled: ranked button", () => enabled.page.evaluate(() => !!document.querySelector(".polyranked-menu-button")), 60000);
   check("enabled: Ranked button present in the main menu", true);
   check("enabled: no duplicate Garage prompt", await enabled.page.evaluate(() => !document.querySelector("dialog.message-box-ui[open]")));
+  const restored = await waitFor("enabled: saved car restored", () => enabled.page.evaluate(() => window.polyModLoader.getMod("carswitcher").activeCar), 120000, 500);
+  const restoredState = await enabled.page.evaluate(() => {
+    const cs = window.polyModLoader.getMod("carswitcher");
+    return { wheelFR: cs.carModuleEval()("ae.value[0].x"), touchingPhysics: cs.touchingPhysics, rankedVanilla: globalThis.polyRanked.isVanilla() };
+  });
+  check("enabled: Car Switcher restores the saved car after the game loads", restored.name === "Trackmania Stadium" && restored.hullVanilla === true, JSON.stringify(restored));
+  check("enabled: its wheel positions are applied and ranked still counts the physics as vanilla", Math.abs(restoredState.wheelFR - 0.740905) < 1e-6 && restoredState.touchingPhysics === false && restoredState.rankedVanilla === true, JSON.stringify(restoredState));
   await enabled.page.screenshot({ path: path.join(artifacts, "site-main-menu.png") });
 
   const errors = pages.flatMap((p) => p.logs.filter((l) => l.startsWith("[pageerror]")).map((l) => `${p.name}: ${l}`));

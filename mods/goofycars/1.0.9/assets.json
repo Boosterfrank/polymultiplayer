@@ -1,0 +1,64 @@
+{
+  "_comment": "Car models of the upstream mod. tools/build-site.mjs downloads them (SHA-256 verified) into <version>/assets/ when building the game copy; they are not committed to this repository.",
+  "source": {
+    "repository": "https://github.com/CRJakob/jakobspolymods",
+    "commit": "b3ae1555d5e3f0c3e9e539ba8e8c0e0add113545",
+    "path": "goofycars/1.0.8/assets"
+  },
+  "files": [
+    {
+      "file": "checkpoint.glb",
+      "size": 75252,
+      "sha256": "fe057466497c7b34fcfb028ff803dac53b45d6435dbf7b6f5f315359d0b0019f",
+      "url": "https://raw.githubusercontent.com/CRJakob/jakobspolymods/b3ae1555d5e3f0c3e9e539ba8e8c0e0add113545/goofycars/1.0.8/assets/checkpoint.glb"
+    },
+    {
+      "file": "dababy.glb",
+      "size": 7014276,
+      "sha256": "a59fa02ee249bea80a763f7e0463526834bbc86cfe5162d1be0e4ff3a30eb12b",
+      "url": "https://raw.githubusercontent.com/CRJakob/jakobspolymods/b3ae1555d5e3f0c3e9e539ba8e8c0e0add113545/goofycars/1.0.8/assets/dababy.glb"
+    },
+    {
+      "file": "golfcart.glb",
+      "size": 400192,
+      "sha256": "cbd7935eb8a477b0b326455c8ced0fa3297294209360db4bb0fb2667224fa85e",
+      "url": "https://raw.githubusercontent.com/CRJakob/jakobspolymods/b3ae1555d5e3f0c3e9e539ba8e8c0e0add113545/goofycars/1.0.8/assets/golfcart.glb"
+    },
+    {
+      "file": "hitbox.glb",
+      "size": 85152,
+      "sha256": "0163d2df97ef7cc1a0b9c10a1f2c00025a334173837effe6eb39bd36130e338c",
+      "url": "https://raw.githubusercontent.com/CRJakob/jakobspolymods/b3ae1555d5e3f0c3e9e539ba8e8c0e0add113545/goofycars/1.0.8/assets/hitbox.glb"
+    },
+    {
+      "file": "legocar.glb",
+      "size": 13473500,
+      "sha256": "d3045cd87b3947afcf3b960caa6f980219364db639d6a835f79531007ed26249",
+      "url": "https://raw.githubusercontent.com/CRJakob/jakobspolymods/b3ae1555d5e3f0c3e9e539ba8e8c0e0add113545/goofycars/1.0.8/assets/legocar.glb"
+    },
+    {
+      "file": "minecart.flac",
+      "size": 555022,
+      "sha256": "89ad3375b314a5ae29ff0ec7aab0fcf78027c6093c698ca25207a6240717f28b",
+      "url": "https://raw.githubusercontent.com/CRJakob/jakobspolymods/b3ae1555d5e3f0c3e9e539ba8e8c0e0add113545/goofycars/1.0.8/assets/minecart.flac"
+    },
+    {
+      "file": "minecart.glb",
+      "size": 96900,
+      "sha256": "5b8d5ca7f52b667a89fb27622d9e1724c06dd45592d00e6d7007b5a2d7a2a278",
+      "url": "https://raw.githubusercontent.com/CRJakob/jakobspolymods/b3ae1555d5e3f0c3e9e539ba8e8c0e0add113545/goofycars/1.0.8/assets/minecart.glb"
+    },
+    {
+      "file": "octane.glb",
+      "size": 1290040,
+      "sha256": "895850c50fd8e6964a68e7c77211a1aa635abbcf7481e9acf0493ec4214d0868",
+      "url": "https://raw.githubusercontent.com/CRJakob/jakobspolymods/b3ae1555d5e3f0c3e9e539ba8e8c0e0add113545/goofycars/1.0.8/assets/octane.glb"
+    },
+    {
+      "file": "wireframe.glb",
+      "size": 1407304,
+      "sha256": "b5ee05225196406ff1fab5952e1e4961984de12887f860d2fbc7490e561a3f71",
+      "url": "https://raw.githubusercontent.com/CRJakob/jakobspolymods/b3ae1555d5e3f0c3e9e539ba8e8c0e0add113545/goofycars/1.0.8/assets/wireframe.glb"
+    }
+  ]
+}

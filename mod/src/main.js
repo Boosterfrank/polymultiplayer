@@ -185,6 +185,18 @@ class PolyRankedApp {
     return vanilla && physicsDeterministic(this.bridge, this.game);
   }
 
+  /** Names of the loaded mods that report a physics change (with their reason when they give one). */
+  physicsMods() {
+    try {
+      return this.pml
+        .getAllMods()
+        .filter((m) => m.isLoaded && m.touchingPhysics === true)
+        .map((m) => (m.physicsReason ? `${m.modName} (${m.physicsReason})` : m.modName));
+    } catch {
+      return [];
+    }
+  }
+
   toggleMenu() {
     if (this.controller.active && !this.menu.isOpen) {
       // Do not cover the game while racing; the HUD shows the match state.
@@ -245,7 +257,13 @@ class PolyRankedApp {
         return;
       }
       if (!this.isVanilla()) {
-        menu.setNotice("Ranked requires vanilla physics: disable physics mods and make sure the game's physics self-test passed.", "error");
+        const culprits = this.physicsMods();
+        menu.setNotice(
+          culprits.length
+            ? `Ranked requires vanilla physics. Mods changing it: ${culprits.join(", ")}.`
+            : "Ranked requires vanilla physics: disable physics mods and make sure the game's physics self-test passed.",
+          "error",
+        );
         return;
       }
       client.send({ type: MSG.QUEUE_JOIN, queue: queueId, vanilla: true });

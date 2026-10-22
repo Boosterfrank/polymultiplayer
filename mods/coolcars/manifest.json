@@ -1,0 +1,8 @@
+{
+    "name": "Cool Cars",
+    "id": "coolcars",
+    "author": "CRJakob (0.6.3 port)",
+    "latest": {
+        "0.6.3": "1.0.5"
+    }
+}

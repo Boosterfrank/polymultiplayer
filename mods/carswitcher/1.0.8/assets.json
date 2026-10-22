@@ -1,0 +1,58 @@
+{
+  "_comment": "Car models of the upstream mod. tools/build-site.mjs downloads them (SHA-256 verified) into <version>/assets/ when building the game copy; they are not committed to this repository.",
+  "source": {
+    "repository": "https://github.com/0rangy/OrangysPolyMods",
+    "commit": "2ecd49e3f56dee37e942a38535da15612eb48029",
+    "path": "carswitcher/1.0.7/assets"
+  },
+  "files": [
+    {
+      "file": "Delorean.glb",
+      "size": 29634912,
+      "sha256": "57a29c889defed006d2967ac01de13ac566da1b8a1187de8c6d9987dc48ca852",
+      "url": "https://raw.githubusercontent.com/0rangy/OrangysPolyMods/2ecd49e3f56dee37e942a38535da15612eb48029/carswitcher/1.0.7/assets/Delorean.glb"
+    },
+    {
+      "file": "F16.glb",
+      "size": 4279220,
+      "sha256": "fff8efc71cdaadd794e67d03474b1ebc1bc5097b763d20e837c9f6fa105e5261",
+      "url": "https://raw.githubusercontent.com/0rangy/OrangysPolyMods/2ecd49e3f56dee37e942a38535da15612eb48029/carswitcher/1.0.7/assets/F16.glb"
+    },
+    {
+      "file": "Forklift2.glb",
+      "size": 3143836,
+      "sha256": "a5067264db11019f217926355443bb5456d1a62881d1fb5c3ba6e3b8ffeab407",
+      "url": "https://raw.githubusercontent.com/0rangy/OrangysPolyMods/2ecd49e3f56dee37e942a38535da15612eb48029/carswitcher/1.0.7/assets/Forklift2.glb"
+    },
+    {
+      "file": "McQueen.glb",
+      "size": 1284648,
+      "sha256": "da52a7e10465e8e1745b093fe53a37025b54452eb78e5262ccf67e52cdb9a690",
+      "url": "https://raw.githubusercontent.com/0rangy/OrangysPolyMods/2ecd49e3f56dee37e942a38535da15612eb48029/carswitcher/1.0.7/assets/McQueen.glb"
+    },
+    {
+      "file": "Pingu3.glb",
+      "size": 12053964,
+      "sha256": "dcb00273e849ef62665627eafd6516e6c24ca2ede41293227f2df92fe1248414",
+      "url": "https://raw.githubusercontent.com/0rangy/OrangysPolyMods/2ecd49e3f56dee37e942a38535da15612eb48029/carswitcher/1.0.7/assets/Pingu3.glb"
+    },
+    {
+      "file": "TMStadium.glb",
+      "size": 1826272,
+      "sha256": "9a7bbdd3885a8891be9ab3d3e7bfe34e0441d78620ccea8488cc285e68057059",
+      "url": "https://raw.githubusercontent.com/0rangy/OrangysPolyMods/2ecd49e3f56dee37e942a38535da15612eb48029/carswitcher/1.0.7/assets/TMStadium.glb"
+    },
+    {
+      "file": "spookycar2.glb",
+      "size": 494800,
+      "sha256": "9f01c0db7c978bd3c40fd50e658c288a7124bf0fa5efe94741fdc0f61fce6a06",
+      "url": "https://raw.githubusercontent.com/0rangy/OrangysPolyMods/2ecd49e3f56dee37e942a38535da15612eb48029/carswitcher/1.0.7/assets/spookycar2.glb"
+    },
+    {
+      "file": "tm2020.glb",
+      "size": 16962216,
+      "sha256": "2782b3481ff6b1e1659d80a1ff29123355e58df614b8df6b01fa155958aaa561",
+      "url": "https://raw.githubusercontent.com/0rangy/OrangysPolyMods/2ecd49e3f56dee37e942a38535da15612eb48029/carswitcher/1.0.7/assets/tm2020.glb"
+    }
+  ]
+}

@@ -32,6 +32,11 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Car models of the ported mods (~260 MB, see mods/*/*/assets.json); keyed by their checksums.
+      - uses: actions/cache@v4
+        with:
+          path: .cache/mod-assets
+          key: mod-assets-${{ hashFiles('mods/*/*/assets.json') }}
       # Tries to switch Pages on automatically; if the token may not, enable it once under Settings -> Pages.
       - uses: actions/configure-pages@v5
         with:

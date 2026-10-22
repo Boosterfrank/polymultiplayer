@@ -86,9 +86,10 @@ registers a set of built-in mods in every player's mod list:
 * **Car Switcher**, **Cool Cars** and **Goofy Cars**, ported to PolyTrack 0.6.3
   in [`mods/`](mods/README.md) and served from the copy, on. They add a
   *Select Car* button to the Garage with 26 car models (Orangy's Car Switcher
-  cars plus CRJakob's two packs). The car models (~260 MB) are downloaded from
-  the upstream repositories while the copy is built, not stored in this
-  repository;
+  cars plus CRJakob's two packs). They can also be installed on any
+  PolyModLoader through the CDN, e.g.
+  `https://cdn.polymodloader.com/gh/boosterfrank/polymultiplayer/main/mods/carswitcher`
+  (then `.../mods/coolcars` and `.../mods/goofycars`);
 * anything else you pass with `--extra-mod <url>[=off]` or `POLYRANKED_EXTRA_MODS`.
 
 Each entry is added once; players can still unload or remove them.
@@ -111,10 +112,8 @@ Publishing it on GitHub Pages (free, stable URL):
 
 Building it yourself: `POLYRANKED_DEFAULT_SERVER=wss://… npm run build:site`
 writes `dist/site/`, which any static host can serve (for example
-`npx http-server dist/site` on the Pi behind the same Cloudflare tunnel). The
-first build downloads the car models into `.cache/mod-assets/` (behind an HTTP
-proxy run it with `NODE_USE_ENV_PROXY=1`). `npm run e2e:site` smoke-tests a
-build in headless Chromium.
+`npx http-server dist/site` on the Pi behind the same Cloudflare tunnel).
+`npm run e2e:site` smoke-tests a build in headless Chromium.
 
 The copy skips PolyTrack's first-launch tutorial; instead new players (nickname
 still "Anonymous") are asked once to visit the Garage and pick a nickname and

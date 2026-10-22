@@ -18,15 +18,17 @@ as `https://cdn.polymodloader.com/cb/CRJakob/jakobspolymods/main/coolcars`).
 
 ## Car models
 
-The `.glb` car models (about 260 MB in total, one of them 96 MB) are **not** in
-this repository. `assets.json` in each version folder lists them with their
-upstream URL (pinned to a commit) and SHA-256; the site build downloads them into
-`.cache/mod-assets/`, verifies the checksum and copies them to
-`mods/<id>/<version>/assets/` in the built copy. The GitHub Pages workflow caches
-that directory between runs. Installing the folders in this repository directly
-through the PolyModLoader CDN therefore does not work (the models would be
-missing); install them from a built copy instead, e.g.
-`https://boosterfrank.github.io/polymultiplayer/mods/carswitcher`.
+The `.glb` car models (about 260 MB in total, one of them 96 MB) are stored
+unchanged in each version's `assets/` folder so the mods can be installed on any
+PolyModLoader straight from this repository through the CDN:
+
+* `https://cdn.polymodloader.com/gh/boosterfrank/polymultiplayer/main/mods/carswitcher`
+* `https://cdn.polymodloader.com/gh/boosterfrank/polymultiplayer/main/mods/coolcars`
+* `https://cdn.polymodloader.com/gh/boosterfrank/polymultiplayer/main/mods/goofycars`
+
+(Car Switcher first; the car packs depend on it.) `assets.json` next to them
+records where each file came from (repository, commit, path) and its SHA-256;
+`tools/build-site.mjs` verifies the checksums when building the game copy.
 
 ## What the ports change
 

@@ -1,5 +1,5 @@
 {
-  "_comment": "Car models of the upstream mod. tools/build-site.mjs downloads them (SHA-256 verified) into <version>/assets/ when building the game copy; they are not committed to this repository.",
+  "_comment": "Provenance and checksums of the car models in ./assets (copied unchanged from the upstream mod). tools/build-site.mjs verifies them when building the game copy.",
   "source": {
     "repository": "https://github.com/CRJakob/jakobspolymods",
     "commit": "b3ae1555d5e3f0c3e9e539ba8e8c0e0add113545",

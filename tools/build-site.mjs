@@ -18,8 +18,8 @@
  *    The version lookup uses a relative path so the copy also works from a sub-directory
  *    (GitHub Pages).
  *  - ./mod: the PolyRanked mod files, importing PolyTypes.js from the copy itself.
- *  - ./mods/<id>: the ported mods from ./mods with their car models downloaded from the upstream
- *    repositories (pinned commits, SHA-256 verified, cached in .cache/mod-assets).
+ *  - ./mods/<id>: the ported mods from ./mods (car models included; their checksums are
+ *    verified against each version's assets.json).
  *  - main.bundle.js: the first-launch tutorial is replaced by a one-time prompt to visit the Garage
  *    and, when POLYRANKED_KODUB_PROXY=<url> is set, PolyTrack's backend
  *    (leaderboards, invite-code multiplayer) is reached through that proxy (see
@@ -28,8 +28,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { Readable } from "node:stream";
-import { pipeline } from "node:stream/promises";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -68,7 +66,6 @@ const PORTED_MODS = [
   { id: "goofycars", match: ["jakobspolymods/main/goofycars"] },
 ];
 for (const m of PORTED_MODS) BUILTIN_MODS.push({ base: `__SELF__/mods/${m.id}`, loaded: true, match: [`__SELF__/mods/${m.id}`, ...m.match] });
-const assetCache = path.resolve(root, process.env.POLYRANKED_ASSET_CACHE ?? path.join(".cache", "mod-assets"));
 const extraMods = [];
 for (let i = 0; i < args.length; i++) if (args[i] === "--extra-mod" && args[i + 1]) extraMods.push(args[++i]);
 for (const m of (process.env.POLYRANKED_EXTRA_MODS ?? "").split(",")) if (m.trim()) extraMods.push(m.trim());
@@ -92,34 +89,6 @@ function assertReplace(source, search, replacement, label) {
 
 function sha256File(file) {
   return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
-}
-
-/**
- * Returns the cached copy of an asset listed in a mod's assets.json, downloading and verifying it
- * first when needed. Behind a proxy run Node with NODE_USE_ENV_PROXY=1 so fetch() honours it.
- */
-async function fetchAsset(asset, label) {
-  if (!/^[0-9a-f]{64}$/.test(asset.sha256 ?? "")) throw new Error(`${label}: ${asset.file} has no sha256`);
-  fs.mkdirSync(assetCache, { recursive: true });
-  const cached = path.join(assetCache, asset.sha256);
-  if (fs.existsSync(cached) && sha256File(cached) === asset.sha256) return cached;
-  for (let attempt = 1; ; attempt++) {
-    const tmp = `${cached}.part`;
-    try {
-      console.log(`[site] downloading ${label}/${asset.file} (${(asset.size / 1024 / 1024).toFixed(1)} MB)`);
-      const res = await fetch(asset.url);
-      if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
-      await pipeline(Readable.fromWeb(res.body), fs.createWriteStream(tmp));
-      const hash = sha256File(tmp);
-      if (hash !== asset.sha256) throw new Error(`checksum mismatch (${hash.slice(0, 12)}… instead of ${asset.sha256.slice(0, 12)}…)`);
-      fs.renameSync(tmp, cached);
-      return cached;
-    } catch (err) {
-      fs.rmSync(tmp, { force: true });
-      if (attempt >= 3) throw new Error(`could not download ${asset.url}: ${err.message}`);
-      console.warn(`[site] ${asset.file}: ${err.message}, retrying`);
-    }
-  }
 }
 
 // 1. PolyModLoader sources
@@ -255,8 +224,8 @@ let bundle = fs.readFileSync(bundlePath, "utf8");
 bundle = assertReplace(bundle, 'from "https://cdn.polymodloader.com/cb/PolyTrackMods/PolyModLoader/0.6.3/PolyTypes.js"', 'from "../../PolyTypes.js"', "PolyTypes import");
 fs.writeFileSync(bundlePath, bundle);
 
-// 5b. Ported mods: manifest + version folder from ./mods/<id>, PolyTypes from the copy, and the
-//     car models listed in assets.json fetched (SHA-256 verified) into <version>/assets/
+// 5b. Ported mods: manifest + version folder (car models included) from ./mods/<id>, PolyTypes
+//     from the copy; the models are checked against the checksums in assets.json
 const portedInfo = {};
 let assetBytes = 0;
 for (const { id } of PORTED_MODS) {
@@ -267,19 +236,16 @@ for (const { id } of PORTED_MODS) {
   const dest = path.join(outDir, "mods", id, version);
   fs.mkdirSync(dest, { recursive: true });
   fs.copyFileSync(path.join(src, "manifest.json"), path.join(outDir, "mods", id, "manifest.json"));
-  for (const f of fs.readdirSync(path.join(src, version))) {
-    if (f === "assets.json") continue;
-    fs.copyFileSync(path.join(src, version, f), path.join(dest, f));
-  }
+  fs.cpSync(path.join(src, version), dest, { recursive: true });
   const mainFile = path.join(dest, JSON.parse(fs.readFileSync(path.join(src, version, "version.json"), "utf8")).main);
   fs.writeFileSync(mainFile, assertReplace(fs.readFileSync(mainFile, "utf8"), 'from "https://cdn.polymodloader.com/cb/PolyTrackMods/PolyModLoader/0.6.3/PolyTypes.js"', 'from "../../../PolyTypes.js"', `${id} PolyTypes import`));
   const assetsFile = path.join(src, version, "assets.json");
   const assets = fs.existsSync(assetsFile) ? JSON.parse(fs.readFileSync(assetsFile, "utf8")) : { files: [] };
-  fs.mkdirSync(path.join(dest, "assets"), { recursive: true });
   for (const asset of assets.files) {
-    if (!/^[\w.-]+$/.test(asset.file)) throw new Error(`mods/${id}: unsafe asset name ${asset.file}`);
-    fs.copyFileSync(await fetchAsset(asset, id), path.join(dest, "assets", asset.file));
-    assetBytes += asset.size ?? 0;
+    const file = path.join(dest, "assets", asset.file);
+    if (!fs.existsSync(file)) throw new Error(`mods/${id}/${version}/assets/${asset.file} is missing`);
+    if (sha256File(file) !== asset.sha256) throw new Error(`mods/${id}/${version}/assets/${asset.file} does not match its checksum in assets.json`);
+    assetBytes += fs.statSync(file).size;
   }
   portedInfo[id] = { version, assets: assets.files.length, upstream: assets.source ?? null };
 }

@@ -86,6 +86,12 @@ export function createServer(cfg, { log = console, storePath } = {}) {
     if (url.pathname === "/api/cup") {
       return json(res, 200, cup ? cup.publicState() : { enabled: false });
     }
+    if (url.pathname === "/api/cup/records") {
+      const records = players.cupRecords();
+      const list = Object.entries(records).map(([trackId, r]) => ({ trackId, track: cup?.pool.find((t) => t.id === trackId)?.name ?? null, ...r }));
+      list.sort((a, b) => (a.track ?? "").localeCompare(b.track ?? "") || a.trackId.localeCompare(b.trackId));
+      return json(res, 200, { records: list });
+    }
     if (url.pathname === "/api/cup/leaderboard") {
       const limit = Math.min(200, Math.max(1, Number(url.searchParams.get("limit") ?? 50) || 50));
       return json(res, 200, { entries: players.cupLeaderboard(limit), recent: (store.data.cups ?? []).slice(-10) });
@@ -440,7 +446,7 @@ export function createServer(cfg, { log = console, storePath } = {}) {
   }
 
   if (cfg.cup?.enabled) {
-    cup = new Cup({ cfg, pool: cupPool(cfg, pool), io, log });
+    cup = new Cup({ cfg, pool: cupPool(cfg, pool), io, log, recordStore: { get: (id) => players.cupRecord(id), set: (id, rec) => players.setCupRecord(id, rec) } });
     matches.set(cup.id, cup);
   }
 

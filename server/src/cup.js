@@ -5,6 +5,17 @@ import { defaultClock } from "./match.js";
 import { resolveCupRules } from "./config.js";
 import { createWorldRecords } from "./worldrecords.js";
 
+/** What clients see of a stored cup record. */
+export function publicCupRecord(record) {
+  if (!record || !Number.isSafeInteger(record.frames)) return null;
+  return { frames: record.frames, nickname: record.nickname ?? "?", nicknames: [record.nickname ?? "?"], playerId: record.playerId ?? null, countryCode: record.countryCode ?? null, setAt: record.setAt ?? null, cupNumber: record.cupNumber ?? null };
+}
+
+function memoryRecordStore() {
+  const map = new Map();
+  return { get: (id) => map.get(id) ?? null, set: (id, rec) => map.set(id, rec), all: () => Object.fromEntries(map) };
+}
+
 export const CUP_PHASE = Object.freeze({
   IDLE: "idle", // waiting for enough racers
   BREAK: "break", // the next round starts shortly
@@ -40,8 +51,10 @@ export class Cup {
    * @param {object} [args.log]
    * @param {() => number} [args.rng]
    * @param {object} [args.worldRecords] createWorldRecords() instance (tests inject a fake)
+   * @param {{get(trackId:string): object|null, set(trackId:string, record:object): void}} [args.recordStore]
+   *   permanent cup track records (the server's player registry); in memory when omitted
    */
-  constructor({ id = "cup", cfg, pool, io, clock = defaultClock, log = console, rng = Math.random, worldRecords = null }) {
+  constructor({ id = "cup", cfg, pool, io, clock = defaultClock, log = console, rng = Math.random, worldRecords = null, recordStore = null }) {
     this.id = id;
     this.cfg = cfg;
     this.settings = cfg.cup;
@@ -54,6 +67,7 @@ export class Cup {
     this.queueId = "cup";
     const wrCfg = cfg.cup.worldRecords ?? {};
     this.worldRecords = worldRecords ?? createWorldRecords({ ...wrCfg, enabled: wrCfg.enabled !== false, now: () => clock.now(), log });
+    this.recordStore = recordStore ?? memoryRecordStore();
     this.phase = CUP_PHASE.IDLE;
     /** @type {Map<string, object>} playerId -> member */
     this.members = new Map();
@@ -67,7 +81,7 @@ export class Cup {
     this.usedTrackIds = []; // tracks visited in this cup (warmup on the first visit only)
     this.recentTrackIds = [];
     this._peekedTrack = null;
-    /** @type {Map<string, {wr: object|null, tr: {frames:number, slots:number[]}|null}>} */
+    /** @type {Map<string, {wr: object|null, tr: object|null}>} wr: world record, tr: the server's cup record for the track (permanent, with its holder) */
     this.trackRecords = new Map();
     this.run = null; // the running round, see startRound()
     this.lastRound = null;
@@ -147,7 +161,7 @@ export class Cup {
   records(trackId) {
     let r = this.trackRecords.get(trackId);
     if (!r) {
-      r = { wr: null, tr: null };
+      r = { wr: null, tr: publicCupRecord(this.recordStore.get(trackId)) };
       this.trackRecords.set(trackId, r);
     }
     return r;
@@ -401,15 +415,21 @@ export class Cup {
     return frames == null ? (l.withoutWrSeconds ?? 300) * 1000 : Math.max((l.minimumSeconds ?? 120) * 1000, Math.ceil(frames * (l.multiplier ?? 4)));
   }
 
+  /** The track's cup record is permanent: a faster finish replaces it (ties keep the first holder). */
   updateTrackRecord(trackId, finishes) {
     const rec = this.records(trackId);
+    const stored = this.recordStore.get(trackId);
+    let best = stored && Number.isSafeInteger(stored.frames) ? stored : null;
     for (const [slot, frames] of finishes) {
-      if (!rec.tr || frames < rec.tr.frames) rec.tr = { frames, slots: [slot], nicknames: [this.bySlot(slot)?.nickname ?? "?"] };
-      else if (frames === rec.tr.frames && !rec.tr.slots.includes(slot)) {
-        rec.tr.slots.push(slot);
-        rec.tr.nicknames.push(this.bySlot(slot)?.nickname ?? "?");
-      }
+      if (best && frames >= best.frames) continue;
+      const p = this.bySlot(slot);
+      best = { frames, playerId: p?.id ?? null, nickname: p?.nickname ?? "?", countryCode: p?.countryCode ?? null, setAt: this.clock.now(), cupNumber: this.cupNumber, round: this.round };
     }
+    if (best && best !== stored) {
+      this.recordStore.set(trackId, best);
+      this.log.info?.(`[cup] new cup record on ${trackId.slice(0, 8)}: ${best.nickname} ${best.frames} ms`);
+    }
+    rec.tr = publicCupRecord(best);
   }
 
   // ---------------------------------------------------------------- membership
@@ -916,7 +936,6 @@ export class Cup {
     this.round = 0;
     this.trackRounds = this.rules.roundsPerTrack; // forces a fresh track for round 1
     this.usedTrackIds = [];
-    for (const rec of this.trackRecords.values()) rec.tr = null; // world records stay, cup records go
     this.run = null;
     this.lastRound = null;
     this.lastTrack = null;

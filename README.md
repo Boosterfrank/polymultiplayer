@@ -61,13 +61,16 @@ The cup is one permanent lobby on the ranked server that plays like a
   retires you from the round. Once somebody finishes the others have **10 s**;
 * finished or retired? You watch the remaining racers with the game's chase
   camera (`[` / `]` switch racer, `/` the free camera); the panel shows the
-  live **ROUND RANKING** with gaps, the world record and the cup's track record;
+  live **ROUND RANKING** with gaps, the world record (WR) and the server's cup
+  record for the track (TR: the fastest cup finish ever set on it and who set
+  it, kept in the server's data file across cups and restarts);
 * places score **10/8/6/5/4/3/2/1**, the first racer at **120 points** with a
   unique lead wins the cup; after a short break the standings reset and the
   next cup starts automatically. Times set in the cup go to the normal
   leaderboards;
 * it does not affect ranked ratings; cup wins have their own leaderboard
-  (`/api/cup/leaderboard`).
+  (`/api/cup/leaderboard`) and the track records are listed at
+  `/api/cup/records`.
 
 The rules are a PolyCup preset: drop your `.polycup-preset.json` into the
 server's `cup.presetFile` (or edit `cup.rules`, see `server/config.example.json`);

@@ -271,7 +271,8 @@ test("a new track every roundsPerTrack rounds (with its own warmup), the first r
   assert.equal(cup.phase, CUP_PHASE.BREAK, "the next cup is scheduled by itself");
   assert.equal(cup.cupNumber, 2);
   assert.deepEqual(cup.pointsBySlot(), { 1: 0, 2: 0 });
-  assert.equal(cup.trackRecords.get(TRACK_B)?.tr, null, "cup track records belong to one cup");
+  assert.equal(cup.trackRecords.get(TRACK_B)?.tr?.frames, 20000, "cup track records are permanent");
+  assert.equal(cup.trackRecords.get(TRACK_B)?.tr?.nickname, "Player 1");
   assert.equal(cup.trackRecords.get(TRACK_A)?.wr?.frames, 60000, "world records are kept");
   clock.advance(5000);
   assert.equal(cup.round, 1);
@@ -415,4 +416,43 @@ test("a round whose racers all leave before GO is voided and the lobby waits", (
   assert.equal(cup.members.size, 0);
   assert.equal(cup.phase, CUP_PHASE.IDLE);
   assert.equal(cup.run, null);
+});
+
+test("cup track records persist in the injected store with the holder's name and survive a new server instance", () => {
+  const stored = new Map();
+  const recordStore = { get: (id) => stored.get(id) ?? null, set: (id, rec) => stored.set(id, rec) };
+  const first = makeCup({ worldRecords: fakeWorldRecords({}) });
+  first.cup.recordStore = recordStore;
+  joinAndLoad(first.cup, 1);
+  joinAndLoad(first.cup, 2);
+  first.clock.advance(5000);
+  reachRacing(first.cup, first.clock);
+  first.clock.advance(30000);
+  first.cup.finish("p2", first.cup.sessionId, 25000);
+  first.cup.finish("p1", first.cup.sessionId, 26000);
+  assert.deepEqual(Object.keys(stored.get(TRACK_A)), ["frames", "playerId", "nickname", "countryCode", "setAt", "cupNumber", "round"]);
+  assert.equal(stored.get(TRACK_A).nickname, "Player 2");
+  assert.equal(stored.get(TRACK_A).playerId, "p2");
+  first.clock.advance(5000);
+  reachRacing(first.cup, first.clock);
+  first.clock.advance(30000);
+  first.cup.finish("p1", first.cup.sessionId, 25000);
+  first.cup.finish("p2", first.cup.sessionId, 25500);
+  assert.equal(stored.get(TRACK_A).nickname, "Player 2", "an equal time does not take the record");
+
+  const second = makeCup({ worldRecords: fakeWorldRecords({}) });
+  second.cup.recordStore = recordStore;
+  assert.equal(second.cup.join(player(3)).ok, true);
+  const found = second.io.last("p3", MSG.MATCH_FOUND);
+  assert.equal(found.track.tr.frames, 25000, "a fresh server shows the stored record");
+  assert.equal(found.track.tr.nickname, "Player 2");
+  joinAndLoad(second.cup, 3);
+  joinAndLoad(second.cup, 4);
+  second.clock.advance(5000);
+  reachRacing(second.cup, second.clock, ["p3", "p4"]);
+  second.clock.advance(30000);
+  second.cup.finish("p4", second.cup.sessionId, 24000);
+  second.cup.finish("p3", second.cup.sessionId, 30000);
+  assert.equal(stored.get(TRACK_A).nickname, "Player 4", "a faster finish takes it over");
+  assert.equal(second.io.last("p3", MSG.CUP_STATE).cup.lastTrack.tr.frames, 24000);
 });

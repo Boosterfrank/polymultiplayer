@@ -4,6 +4,11 @@ import { createWorldRecords, LEADERBOARD_URL } from "../src/worldrecords.js";
 import { cupPool } from "../src/index.js";
 import { buildPool } from "../src/tracks.js";
 import { testConfig } from "./helpers.js";
+import { JsonStore } from "../src/store.js";
+import { PlayerRegistry } from "../src/players.js";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 const entry = (frames, nickname = "cheesebob", countryCode = "DE") => ({ total: 1, entries: [{ id: 1, userId: "u", nickname, frames, time: frames / 1000, carStyle: "", verifiedState: 1, countryCode }] });
 
@@ -59,4 +64,23 @@ test("the cup draws from the categories of its rules: official from the server l
   assert.deepEqual(cupPool(cfg, ranked, community).map((t) => [t.name, t.category]), [["Mine", "custom"]]);
   cfg.cup.tracks = [{ id: "e".repeat(64), name: "Only", trackUrl: "tracks/official/summer1.track" }];
   assert.deepEqual(cupPool(cfg, ranked, community).map((t) => t.name), ["Only"]);
+});
+
+test("cup track records and recent cups are written to the JSON store and read back after a restart", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "polyranked-store-"));
+  const file = path.join(dir, "polyranked.json");
+  const store = new JsonStore(file, { log: { error() {} } });
+  store.load();
+  const players = new PlayerRegistry(store, testConfig().rating);
+  players.setCupRecord("t1", { frames: 12345, playerId: "p9", nickname: "cheesebob", countryCode: "de", setAt: 1, cupNumber: 3, round: 2 });
+  players.recordCup({ cupNumber: 3, winner: { nickname: "cheesebob" } });
+  store.close();
+  const again = new JsonStore(file, { log: { error() {} } });
+  again.load();
+  const reloaded = new PlayerRegistry(again, testConfig().rating);
+  assert.equal(reloaded.cupRecord("t1").nickname, "cheesebob");
+  assert.equal(reloaded.cupRecord("t1").frames, 12345);
+  assert.equal(again.data.cups.length, 1, "the recent cups list survives too");
+  assert.equal(reloaded.cupRecord("nope"), null);
+  fs.rmSync(dir, { recursive: true, force: true });
 });

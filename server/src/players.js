@@ -126,6 +126,22 @@ export class PlayerRegistry {
     return rows.slice(0, limit).map((r, i) => ({ position: i + 1, ...r }));
   }
 
+  /** Permanent cup track records: the fastest cup finish on a track and who set it. */
+  cupRecord(trackId) {
+    return this.store.data.cupRecords?.[trackId] ?? null;
+  }
+
+  setCupRecord(trackId, record) {
+    const data = this.store.data;
+    data.cupRecords = data.cupRecords ?? {};
+    data.cupRecords[trackId] = { ...record };
+    this.store.markDirty();
+  }
+
+  cupRecords() {
+    return { ...(this.store.data.cupRecords ?? {}) };
+  }
+
   recordCup(summary, keep = 200) {
     const data = this.store.data;
     data.cups = data.cups ?? [];

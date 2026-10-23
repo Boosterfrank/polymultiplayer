@@ -24,7 +24,9 @@ export class JsonStore {
       if (fs.existsSync(this.filePath)) {
         const raw = fs.readFileSync(this.filePath, "utf8");
         const parsed = JSON.parse(raw);
+        // Other sections (recent cups, cup track records, ...) are kept as they are.
         this.data = {
+          ...(parsed && typeof parsed === "object" ? parsed : {}),
           players: parsed.players ?? {},
           matches: parsed.matches ?? [],
           meta: { matchCounter: 0, ...(parsed.meta ?? {}) },

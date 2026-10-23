@@ -51,7 +51,7 @@ Each `bytes` blob is a car state in the game's own multiplayer encoding
 | `server_message` | `text` (shown as an in-game toast) |
 | `pong` | `t`, `serverTime` |
 | `leaderboard` | `queue`, `entries[] {position, id, nickname, countryCode, rating, matches, wins, losses, division}` |
-| `cup_state` | `cup` – the lobby: `{name, phase (idle, break, loading, warmup, countdown, racing, complete), cupNumber, round, trackRounds, roundsPerTrack, rules {target, points, finishTimeoutSeconds, roundBreakSeconds, warmup…, allowSpectatorFreecam, uploadLeaderboardTimes}, gameMode, minPlayers, maxPlayers, track {…, category, wr {status, frames, nickname, countryCode}, tr {frames, slots, nicknames}}, lastTrack, players[] {slot, id, nickname, countryCode, carStyle, connected, racing, pending, points, pb}, standings[] {slot, id, nickname, points, place, connected}, live {sessionId, racers[], ready[], warmup, warmupMs, warmupReady[], warmupEndsAt, startsAt, deadline, limitAt, finishes {slot: frames}, dnfs[], splits {slot: {index, frames, bestFrames}}, movement {slot: places}}, lastRound {round, trackId, finishes, points, dnfs, movement, results[]}, winner, nextAt, lastWinner, serverTime}` (sent to members on every change, including every checkpoint) |
+| `cup_state` | `cup` – the lobby: `{name, phase (idle, break, loading, warmup, countdown, racing, complete), cupNumber, round, trackRounds, roundsPerTrack, rules {target, points, finishTimeoutSeconds, roundBreakSeconds, warmup…, allowSpectatorFreecam, uploadLeaderboardTimes}, gameMode, minPlayers, maxPlayers, track {…, category, wr {status, frames, nickname, countryCode}, tr {frames, nickname, nicknames, playerId, countryCode, setAt, cupNumber} – the server's permanent cup record}, lastTrack, players[] {slot, id, nickname, countryCode, carStyle, connected, racing, pending, points, pb}, standings[] {slot, id, nickname, points, place, connected}, live {sessionId, racers[], ready[], warmup, warmupMs, warmupReady[], warmupEndsAt, startsAt, deadline, limitAt, finishes {slot: frames}, dnfs[], splits {slot: {index, frames, bestFrames}}, movement {slot: places}}, lastRound {round, trackId, finishes, points, dnfs, movement, results[]}, winner, nextAt, lastWinner, serverTime}` (sent to members on every change, including every checkpoint) |
 | `cup_end` | `cupNumber`, `winner {slot, id, nickname, points}`, `standings[]`, `scores`, `rounds`, `nextCupIn`, `nextAt`, `nextTrack`, `players` |
 
 ### The always-on cup
@@ -87,4 +87,6 @@ The game only ever compares session ids for equality.
 `GET /health`, `GET /api/queues`, `GET /api/leaderboard?queue=duel&limit=50`,
 `GET /api/stats`, `GET /api/cup` (the lobby, same shape as `cup_state.cup`, or
 `{enabled: false}`), `GET /api/cup/leaderboard` (cup wins per player and the last
-cups), and `GET /mod/*` when the server is started with `--serve-mod <dir>`.
+cups), `GET /api/cup/records` (the permanent cup track records: `{records[]
+{trackId, track, frames, playerId, nickname, countryCode, setAt, cupNumber,
+round}}`), and `GET /mod/*` when the server is started with `--serve-mod <dir>`.

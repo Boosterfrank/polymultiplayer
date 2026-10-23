@@ -218,8 +218,11 @@ try {
   await sleep(3000);
   await alice.page.evaluate(() => globalThis.polyRanked.cup.reportFinish(2800));
   await waitFor("server: cup idle with Alice alone", () => ranked.cup.phase === "idle" && ranked.cup.members.size === 1, 30000, 200);
-  const aliceAlone = await alice.page.evaluate(() => ({ players: globalThis.polyRanked.cup.state?.players?.length, hud: document.querySelector(".prc-hud")?.innerText?.replace(/\s+/g, " ") ?? "", active: globalThis.polyRanked.cup.active }));
-  check("Alice: still in the cup, HUD waits for racers", aliceAlone.active && aliceAlone.players === 1 && /Waiting for racers/.test(aliceAlone.hud), JSON.stringify(aliceAlone).slice(0, 200));
+  const aliceAlone = await waitFor("Alice: HUD waits for racers", async () => {
+    const r = await alice.page.evaluate(() => ({ players: globalThis.polyRanked.cup.state?.players?.length, hud: document.querySelector(".prc-hud")?.innerText?.replace(/\s+/g, " ") ?? "", active: globalThis.polyRanked.cup.active }));
+    return /Waiting for racers/.test(r.hud) ? r : null;
+  }, 10000, 200);
+  check("Alice: still in the cup, HUD waits for racers", aliceAlone.active && aliceAlone.players === 1, JSON.stringify(aliceAlone).slice(0, 200));
   check("fewer than two racers: the Session Results dialog is shown", await waitFor("Alice: session results while idle", () => sessionEnd(alice), 5000, 100), "");
 
   // Alice leaves; the cup is empty

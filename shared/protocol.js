@@ -18,6 +18,10 @@ export const MSG = Object.freeze({
   LEADERBOARD_GET: "leaderboard_get",
   CUP_JOIN: "cup_join",
   CUP_LEAVE: "cup_leave",
+  CUP_ROUND_READY: "cup_round_ready", // the in-game state for a cup session exists {sessionId, pb}
+  CUP_WARMUP_READY: "cup_warmup_ready", // done practising {sessionId}
+  CUP_CHECKPOINT: "cup_checkpoint", // live-round progress {sessionId, index, frames}
+  CUP_DNF: "cup_dnf", // retire from the live round {sessionId}
   // server -> client
   WELCOME: "welcome",
   ERROR: "error",

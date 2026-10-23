@@ -2,6 +2,7 @@ import { PolyMod } from "https://cdn.polymodloader.com/cb/PolyTrackMods/PolyModL
 import { MSG } from "../../shared/protocol.js";
 import { MOD_ID, MOD_NAME, MOD_VERSION, GAME_VERSION, SHOW_MENU_BUTTON } from "./config.js";
 import { installBridgeMixin, waitForBridge, validateBridge, lookupGame, physicsDeterministic, physicsDeterminism } from "./bridge.js";
+import { connectGame } from "./game.js";
 import { RankedClient } from "./client.js";
 import { getSecret, loadSettings, saveSettings } from "./identity.js";
 import { MatchController } from "./match.js";
@@ -10,6 +11,8 @@ import { installMainMenuButton } from "./ui/mainmenu.js";
 import { installCupButton } from "./ui/cupbutton.js";
 import { RankedMenu } from "./ui/menu.js";
 import { MatchHud } from "./ui/hud.js";
+import { CupController } from "./cup/controller.js";
+import { CupHud } from "./cup/hud.js";
 import { log } from "./util.js";
 
 class PolyRankedMod extends PolyMod {
@@ -72,6 +75,9 @@ class PolyRankedApp {
     this.menu = null;
     this.hud = null;
     this.controller = null;
+    this.native = null;
+    this.cupHud = null;
+    this.cup = null;
     this.removeMenuButton = null;
     this.pendingQueue = null;
     this.pendingCupJoin = false;
@@ -85,12 +91,17 @@ class PolyRankedApp {
     this.hud = new MatchHud({ serverNow: () => this.client.serverNow() });
     this.hud.setEnabled(this.settings.showHud !== false);
     this.controller = new MatchController({ client: this.client, bridge: this.bridge, game: this.game, hud: this.hud });
+    this.native = connectGame(this.pml);
+    if (!this.native) log.warn("live-round hooks unavailable on this game build; the cup cannot be joined");
+    this.cupHud = new CupHud({ serverNow: () => this.client.serverNow() });
+    this.cupHud.setEnabled(this.settings.showHud !== false);
+    this.cup = new CupController({ client: this.client, bridge: this.bridge, game: this.game, native: this.native, hud: this.cupHud });
     if (SHOW_MENU_BUTTON) this.removeMenuButton = installMainMenuButton(() => this.toggleMenu());
     this.cupButton = installCupButton({
       onJoin: () => this.joinCup(),
-      onLeave: () => this.controller.leaveCup(),
+      onLeave: () => this.cup.leaveCup(),
       fetchState: () => this.fetchCupState(),
-      localState: () => ({ inCup: !!this.controller.cup && this.controller.active, phase: this.controller.cup?.phase ?? null, notice: this.cupNotice }),
+      localState: () => ({ inCup: this.cup.active, phase: this.cup.phase, racing: this.cup.isRacer(), notice: this.cupNotice }),
       serverNow: () => this.client.serverNow(),
     });
     this.onKeyDown = (ev) => {
@@ -131,7 +142,7 @@ class PolyRankedApp {
     let attempts = 0;
     const timer = setInterval(() => {
       if (++attempts > 600) return clearInterval(timer);
-      if (this.controller.active || this.menu.isOpen) return;
+      if (this.controller.active || this.cup.active || this.menu.isOpen) return;
       let ready = false;
       try {
         const state = this.bridge.getState();
@@ -210,10 +221,9 @@ class PolyRankedApp {
   }
 
   toggleMenu() {
-    if (this.controller.active && !this.menu.isOpen && (this.controller.gameStarted || !this.controller.cup)) {
-      // Do not cover the game while racing; the HUD shows the match state.
-      return;
-    }
+    // Do not cover the game while racing; the HUDs show the match / cup state.
+    if (this.controller.active && !this.menu.isOpen) return;
+    if (this.cup.active && this.cup.gameStarted && !this.menu.isOpen) return;
     this.menu.toggle();
   }
 
@@ -246,8 +256,17 @@ class PolyRankedApp {
   /** "Join the Cup" on the multiplayer page: connect if needed, then ask the server for a seat. */
   joinCup() {
     this.cupNotice = null;
+    if (this.cup.active) {
+      this.cupButton?.refresh();
+      return;
+    }
     if (this.controller.active) {
-      if (!this.controller.cup) this.cupNotice = "Finish your ranked match first";
+      this.cupNotice = "Finish your ranked match first";
+      this.cupButton?.refresh();
+      return;
+    }
+    if (!this.native) {
+      this.cupNotice = "The cup needs PolyTrack 0.6.3 internals this game build does not have";
       this.cupButton?.refresh();
       return;
     }
@@ -305,7 +324,7 @@ class PolyRankedApp {
     client.on("error", (msg) => {
       menu.setNotice(msg.message, "error");
       if (msg.code === "cannot_queue" || msg.code === "in_match") menu.setQueueStatus(null);
-      if (["cup_full", "cup_disabled", "cannot_queue", "in_match"].includes(msg.code) && !controller.active) {
+      if (["cup_full", "cup_disabled", "cannot_queue", "in_match"].includes(msg.code) && !controller.active && !this.cup.active) {
         this.cupNotice = msg.message;
         this.cupButton?.refresh();
       }
@@ -339,7 +358,7 @@ class PolyRankedApp {
     menu.on("disconnect", () => client.disconnect());
     menu.on("queue", (queueId) => {
       menu.setNotice(null);
-      if (controller.cup) {
+      if (this.cup.active) {
         menu.setNotice("Leave the cup before queueing for ranked.", "error");
         return;
       }
@@ -367,6 +386,7 @@ class PolyRankedApp {
       this.settings = saveSettings({ ...this.settings, ...patch });
       menu.setSettings(this.settings);
       this.hud.setEnabled(this.settings.showHud !== false);
+      this.cupHud.setEnabled(this.settings.showHud !== false);
       if (urlChanged) {
         client.disconnect();
         client.connect();
@@ -377,15 +397,22 @@ class PolyRankedApp {
       menu.setNotice(text, "error");
       menu.open();
     });
-    controller.on("left", (info) => {
-      menu.setNotice(info?.cup ? "You left the cup." : "You left the match (counts as a loss).");
+    controller.on("left", () => {
+      menu.setNotice("You left the match (counts as a loss).");
       this.cupButton?.refresh();
     });
-    controller.on("leftCup", () => {
+    this.cup.on("error", (text) => {
+      menu.setNotice(text, "error");
+      menu.open();
+    });
+    this.cup.on("left", () => {
       menu.setNotice("You left the cup.");
       this.cupButton?.refresh();
     });
-    controller.on("cupState", () => this.cupButton?.refresh());
+    this.cup.on("state", (state) => {
+      if (state) this.cupButton?.setState(state);
+      else this.cupButton?.refresh();
+    });
     controller.on("queueAgain", () => {
       const queueId = controller.matchEnd?.queueId ?? client.welcome?.queues?.[0]?.id;
       menu.open();

@@ -59,6 +59,7 @@ export class RankedConnection {
    * @param {(sessionId:number) => void} [opts.onAttached] the game created its in-game state for this session
    * @param {number} [opts.flushIntervalMs]
    * @param {number} [opts.gameMode]
+   * @param {(frames:number) => number} [opts.transformRecord] adjust a finish time before it is reported (cup rounds add the time spent before a restart)
    */
   constructor(opts) {
     this.client = opts.client;
@@ -68,6 +69,7 @@ export class RankedConnection {
     this.onDispose = opts.onDispose ?? (() => {});
     this.onAttached = opts.onAttached ?? (() => {});
     this.gameMode = opts.gameMode ?? GAME_MODE_COMPETITIVE;
+    this.transformRecord = opts.transformRecord ?? null;
     this.flushIntervalMs = opts.flushIntervalMs ?? CAR_FLUSH_MS;
 
     this.players = new Map();
@@ -272,7 +274,9 @@ export class RankedConnection {
 
   sendRecord(sessionId, time) {
     if (sessionId !== this.sessionId || this.sessionEnded) return;
-    const frames = time?.numberOfFrames;
+    let frames = time?.numberOfFrames;
+    if (!Number.isInteger(frames) || frames <= 0) return;
+    if (this.transformRecord) frames = this.transformRecord(frames);
     if (!Number.isInteger(frames) || frames <= 0) return;
     const me = this.players.get(this.matchSlot);
     if (me && (!me.record || frames < me.record.numberOfFrames)) {
@@ -295,14 +299,23 @@ export class RankedConnection {
 
   // ----------------------------------------------------------------- driven by the match controller
 
-  /** A new round: tell the game to (re)start on the track. */
-  startSession(sessionId, track) {
+  /**
+   * A new round: tell the game to (re)start on the track (its new-session callback), unless the
+   * caller starts the game itself (`announce: false`, used to pass the track's category along).
+   */
+  startSession(sessionId, track, { announce = true } = {}) {
     this.sessionId = sessionId;
     this.sessionEnded = false;
     this.track = track;
     for (const p of this.players.values()) p.record = null;
     this.pending = { sessionId, resetCounter: 0, states: [] };
-    for (const cb of [...this.cb.newSession]) safe(() => cb(sessionId, this.gameMode, track.trackMetadata, track.trackData), "newSession");
+    if (announce) for (const cb of [...this.cb.newSession]) safe(() => cb(sessionId, this.gameMode, track.trackMetadata, track.trackData), "newSession");
+  }
+
+  /** Forget the times set so far in this session (a cup race starts after its warmup). */
+  clearRecords() {
+    for (const p of this.players.values()) p.record = null;
+    this.firePlayersChanged();
   }
 
   endSession(sessionId) {

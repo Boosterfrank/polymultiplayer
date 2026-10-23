@@ -9,7 +9,8 @@ import { PlayerRegistry, sanitizeNickname } from "./players.js";
 import { Matchmaker } from "./matchmaking.js";
 import { Match, PHASE } from "./match.js";
 import { Cup } from "./cup.js";
-import { buildPool, pickTrack } from "./tracks.js";
+import { buildPool, pickTrack, loadCommunityTracks } from "./tracks.js";
+import { resolveCupRules } from "./config.js";
 import { divisionFor } from "./rating.js";
 import { createKodubProxy } from "./kodubproxy.js";
 
@@ -31,6 +32,23 @@ const MAX_BIN_PER_SECOND = 60;
  * Create (but do not start) the PolyRanked server.
  * @returns {{cfg, httpServer, wss, store, players, matchmaker, matches, listen(), close()}}
  */
+/**
+ * Tracks the cup draws from: `cup.tracks` when given, otherwise every category of the rules' `pool`
+ * (official = the server's track list, community = the 0.6.3 community tracks shipped with the game,
+ * custom = `cup.customTracks`).
+ */
+export function cupPool(cfg, rankedPool, communityTracks = loadCommunityTracks()) {
+  if (Array.isArray(cfg.cup.tracks) && cfg.cup.tracks.length) return buildPool(cfg.cup.tracks);
+  const rules = resolveCupRules(cfg.cup);
+  const list = [];
+  if (rules.pool.includes("official")) list.push(...rankedPool.filter((t) => t.category === "official"));
+  if (rules.pool.includes("community")) list.push(...buildPool(communityTracks), ...rankedPool.filter((t) => t.category === "community"));
+  if (rules.pool.includes("custom")) list.push(...buildPool(cfg.cup.customTracks ?? []), ...rankedPool.filter((t) => t.category === "custom"));
+  const seen = new Set();
+  const pool = list.filter((t) => (seen.has(t.id) ? false : (seen.add(t.id), true)));
+  return pool.length ? pool : rankedPool;
+}
+
 export function createServer(cfg, { log = console, storePath } = {}) {
   const store = new JsonStore(storePath === undefined ? path.join(cfg.dataDir, "polyranked.json") : storePath, { log });
   store.load();
@@ -63,7 +81,7 @@ export function createServer(cfg, { log = console, storePath } = {}) {
       return res.end();
     }
     if (url.pathname === "/" || url.pathname === "/health") {
-      return json(res, 200, { ok: true, name: "polyranked", protocol: PROTOCOL_VERSION, online: connections.size, matches: matches.size - (cup ? 1 : 0), queues: queueIds.map((q) => matchmaker.status(q)), cup: cup ? { phase: cup.phase, players: cup.members.size, round: cup.round, cupNumber: cup.cupNumber } : null, kodubProxy: kodubProxy ? { path: kodubProxy.prefix, origin: kodubProxy.origin, ...kodubProxy.stats } : null });
+      return json(res, 200, { ok: true, name: "polyranked", protocol: PROTOCOL_VERSION, online: connections.size, matches: matches.size - (cup ? 1 : 0), queues: queueIds.map((q) => matchmaker.status(q)), cup: cup ? { phase: cup.phase, players: cup.members.size, round: cup.round, cupNumber: cup.cupNumber, tracks: cup.pool.length } : null, kodubProxy: kodubProxy ? { path: kodubProxy.prefix, origin: kodubProxy.origin, ...kodubProxy.stats } : null });
     }
     if (url.pathname === "/api/cup") {
       return json(res, 200, cup ? cup.publicState() : { enabled: false });
@@ -241,6 +259,14 @@ export function createServer(cfg, { log = console, storePath } = {}) {
       case MSG.CUP_LEAVE:
         if (cup) cup.leave(conn.playerId);
         return;
+      case MSG.CUP_ROUND_READY:
+        return cup?.roundReady(conn.playerId, Number(msg.sessionId), msg.pb === null ? null : msg.pb === undefined ? undefined : Number(msg.pb));
+      case MSG.CUP_WARMUP_READY:
+        return cup?.warmupReady(conn.playerId, Number(msg.sessionId));
+      case MSG.CUP_CHECKPOINT:
+        return cup?.checkpoint(conn.playerId, Number(msg.sessionId), Number(msg.index), Number(msg.frames));
+      case MSG.CUP_DNF:
+        return cup?.dnf(conn.playerId, Number(msg.sessionId));
       case MSG.LEADERBOARD_GET: {
         const queue = cfg.queues[msg.queue] ? msg.queue : queueIds[0];
         return conn.send({ type: MSG.LEADERBOARD, queue, entries: players.leaderboard(queue, 50) });
@@ -414,7 +440,7 @@ export function createServer(cfg, { log = console, storePath } = {}) {
   }
 
   if (cfg.cup?.enabled) {
-    cup = new Cup({ cfg, pool, io, log });
+    cup = new Cup({ cfg, pool: cupPool(cfg, pool), io, log });
     matches.set(cup.id, cup);
   }
 
@@ -493,7 +519,7 @@ if (isMain) {
   const cfg = loadConfig();
   const server = createServer(cfg);
   server.listen().then((addr) => {
-    console.log(`[polyranked] listening on ws://${addr.address}:${addr.port}  (queues: ${Object.keys(cfg.queues).join(", ")}, tracks: ${cfg.tracks.length}, cup: ${cfg.cup?.enabled ? cfg.cup.name : "off"})`);
+    console.log(`[polyranked] listening on ws://${addr.address}:${addr.port}  (queues: ${Object.keys(cfg.queues).join(", ")}, tracks: ${cfg.tracks.length}, cup: ${cfg.cup?.enabled ? `${cfg.cup.name}, ${cup.pool.length} tracks` : "off"})`);
     if (cfg.serveModFrom) console.log(`[polyranked] serving mod files from ${path.resolve(cfg.serveModFrom)} at http://localhost:${addr.port}/mod/`);
     if (cfg.kodubProxy?.enabled) console.log(`[polyranked] proxying PolyTrack's backend at http://localhost:${addr.port}${cfg.kodubProxy.path} (origin ${cfg.kodubProxy.origin})`);
   });

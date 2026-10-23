@@ -6,9 +6,31 @@
   "requireVanillaPhysics": true,
   "trackPerRound": false,
   "queues": {
-    "duel": { "name": "Ranked 1v1", "teams": 2, "teamSize": 1, "scoring": "duel", "roundsToWin": 4, "maxRounds": 9 },
-    "teams": { "name": "Ranked 3v3", "teams": 2, "teamSize": 3, "scoring": "teams", "roundsToWin": 5, "maxRounds": 13, "pointsTable": [6, 5, 4, 3, 2, 1] },
-    "ffa": { "name": "Ranked FFA", "players": 4, "minPlayers": 3, "scoring": "points", "maxRounds": 5, "pointsTable": [10, 6, 4, 3, 2, 1] }
+    "duel": {
+      "name": "Ranked 1v1",
+      "teams": 2,
+      "teamSize": 1,
+      "scoring": "duel",
+      "roundsToWin": 4,
+      "maxRounds": 9
+    },
+    "teams": {
+      "name": "Ranked 3v3",
+      "teams": 2,
+      "teamSize": 3,
+      "scoring": "teams",
+      "roundsToWin": 5,
+      "maxRounds": 13,
+      "pointsTable": [6, 5, 4, 3, 2, 1]
+    },
+    "ffa": {
+      "name": "Ranked FFA",
+      "players": 4,
+      "minPlayers": 3,
+      "scoring": "points",
+      "maxRounds": 5,
+      "pointsTable": [10, 6, 4, 3, 2, 1]
+    }
   },
   "rounds": {
     "countdownSeconds": 4,
@@ -28,12 +50,46 @@
     "name": "Quickplay Cup",
     "minPlayers": 2,
     "maxPlayers": 8,
-    "roundsPerTrack": 3,
-    "target": 100,
-    "pointsTable": [10, 8, 6, 5, 4, 3, 2, 1],
-    "waitSeconds": 8,
+    "rules": {
+      "allowRacerChanges": true,
+      "allowSpectatorFreecam": true,
+      "uploadLeaderboardTimes": true,
+      "roundsPerTrack": 4,
+      "pointsToWin": 120,
+      "finalist": false,
+      "points": [10, 8, 6, 5, 4, 3, 2, 1],
+      "selection": "random",
+      "bansPerRacer": 0,
+      "picksPerRacer": 0,
+      "pool": [
+        "official",
+        "community"
+      ],
+      "warmup": "first-visit",
+      "warmupTiming": "wr",
+      "warmupSeconds": 90,
+      "warmupMultiplier": 1.4,
+      "warmupMinimumSeconds": 30,
+      "readyEndsWarmup": true,
+      "finishTimeoutSeconds": 10,
+      "roundBreakSeconds": 5
+    },
+    "presetFile": null,
+    "countdownSeconds": 3,
+    "loadGraceSeconds": 30,
+    "disconnectGraceSeconds": 15,
+    "roundLimit": {
+      "enabled": true,
+      "multiplier": 4,
+      "minimumSeconds": 120,
+      "withoutWrSeconds": 300
+    },
     "breakSeconds": 20,
-    "idleResetSeconds": 300
+    "idleResetSeconds": 300,
+    "worldRecords": {
+      "enabled": true,
+      "cacheSeconds": 900
+    }
   },
   "kodubProxy": {
     "enabled": false,

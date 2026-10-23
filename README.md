@@ -45,18 +45,32 @@ refused.
 
 Open **Multiplayer** in the main menu and the page carries a big **Join the Cup**
 button with the live state of the cup (who is racing, which track, who leads).
-The cup is one permanent lobby on the ranked server:
+The cup is one permanent lobby on the ranked server that plays like a
+[PolyCup](https://github.com/Prawnfoot05/PolyCup) running the Quickplay preset:
 
-* it never closes; join and leave whenever you like, late joiners race from the
-  next round and leavers keep their points for a comeback;
-* rounds start by themselves once two racers are in, every three rounds a new
-  random track is drawn, places score 10/8/6/5/4/3/2/1 (Quickplay rules);
-* the first racer to reach 100 points with a unique lead wins; the standings
-  reset after a short break and the next cup starts automatically;
+* it never closes; join and leave whenever you like. Late joiners watch the
+  running round from inside the session and race from the next one, leavers keep
+  their points for a comeback;
+* a random track from the main and community tracks every **4 rounds**. The
+  first visit of a track starts with a **warmup** (1.4 x the world record, at
+  least 30 s, 90 s without a known record); press **Ready** when you are done
+  practising – when everyone is ready the countdown starts right away;
+* rounds are **live**: 3-2-1-GO, everybody's clock starts at GO, one run.
+  **R / Enter** returns you to the last checkpoint (before the first checkpoint
+  it restarts the run, the round clock keeps counting), **T / Backspace**
+  retires you from the round. Once somebody finishes the others have **10 s**;
+* finished or retired? You watch the remaining racers with the game's chase
+  camera (`[` / `]` switch racer, `/` the free camera); the panel shows the
+  live **ROUND RANKING** with gaps, the world record and the cup's track record;
+* places score **10/8/6/5/4/3/2/1**, the first racer at **120 points** with a
+  unique lead wins the cup; after a short break the standings reset and the
+  next cup starts automatically. Times set in the cup go to the normal
+  leaderboards;
 * it does not affect ranked ratings; cup wins have their own leaderboard
   (`/api/cup/leaderboard`).
 
-Everything is tunable in the server's `cup` section (`server/config.example.json`);
+The rules are a PolyCup preset: drop your `.polycup-preset.json` into the
+server's `cup.presetFile` (or edit `cup.rules`, see `server/config.example.json`);
 `"enabled": false` hides the button.
 
 ## Hosting a server
@@ -82,8 +96,11 @@ merged over the defaults in `server/src/config.js`:
 * `rating` – initial rating, K factors, placement matches, division thresholds.
 * `trackPerRound` – pick a new track every round instead of one per match.
 * `gameVersion` / `requireVanillaPhysics` – gate who may queue (and join the cup).
-* `cup` – the always-on Quickplay Cup (players needed, rounds per track, points,
-  target, break between cups), or `"enabled": false`.
+* `cup` – the always-on Quickplay Cup: `rules` in the PolyCup preset format (or
+  `presetFile`), the track categories it draws from, players needed, load and
+  disconnect grace, the safety limit of a round, the break between cups, and
+  `worldRecords` (fetched from PolyTrack's leaderboard with the PolyModLoader
+  origin, for the warmup length and the WR line), or `"enabled": false`.
 
 Players are stored in `data/polyranked.json` (atomic JSON writes). The HTTP side
 exposes `/health`, `/api/queues`, `/api/leaderboard?queue=duel`, `/api/stats`.
@@ -165,7 +182,7 @@ to Kodub.
 
 ```bash
 npm install                    # esbuild for the mod bundle
-npm run build                  # mod/src → 0.2.1/main.mod.js (+ POLYRANKED_DEFAULT_SERVER=wss://… to bake a default)
+npm run build                  # mod/src → 0.3.0/main.mod.js (+ POLYRANKED_DEFAULT_SERVER=wss://… to bake a default)
 npm test                       # mod unit tests + server tests (rules, rating, matchmaking, match engine, sockets)
 npm run dev                    # build, then run the server and serve the mod at http://localhost:8788/mod/
 npm run build:site             # self-contained PolyModLoader copy with the mod pre-installed -> dist/site/
@@ -174,8 +191,9 @@ npm run build:site             # self-contained PolyModLoader copy with the mod 
 For local testing add `http://localhost:8788/mod` as the mod URL in PML (PML does
 not cache localhost mods). `node test/e2e/run.mjs --game-dir <PolyModLoader checkout>`
 runs a headless Chromium end-to-end match using the real game build, and
-`node test/e2e/cup.mjs` does the same for the always-on cup (see the file
-headers for details).
+`node test/e2e/cup.mjs` does the same for the always-on cup (warmup, ready-up,
+GO, finish window, retiring, spectating, a cup win and the automatic restart;
+see the file headers for details).
 
 Repository layout, the game-hooking approach and the ranked rules are described
 in [docs/DESIGN.md](docs/DESIGN.md); the message format in

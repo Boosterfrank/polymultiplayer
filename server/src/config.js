@@ -93,24 +93,41 @@ export const DEFAULT_CONFIG = {
   trackPerRound: false,
   /**
    * The always-on Quickplay Cup: one permanent lobby players join and leave whenever they like.
-   * Every `roundsPerTrack` rounds a new random track is drawn; places score `pointsTable`; the first
-   * player at or above `target` (with a unique lead) wins, the standings reset after `breakSeconds`
-   * and the next cup starts by itself. Nothing here touches ranked ratings.
+   * `rules` follow the PolyCup preset format (a `.polycup-preset.json` file can be dropped in with
+   * `presetFile`): live rounds with a warmup on every new track, `finishTimeoutSeconds` for the others
+   * once someone finishes, a short break, points by place, first at `pointsToWin` with a unique lead
+   * wins and the next cup starts by itself. Nothing here touches ranked ratings.
    */
   cup: {
     enabled: true,
     name: "Quickplay Cup",
     minPlayers: 2,
     maxPlayers: 8,
-    roundsPerTrack: 3,
-    target: 100,
-    pointsTable: [10, 8, 6, 5, 4, 3, 2, 1],
-    /** Once enough players are in, the first round starts after this long (lets others load). */
-    waitSeconds: 8,
+    /** PolyCup preset rules (see `CUP_RULES`); a `presetFile` or inline `preset` replaces them. */
+    rules: null,
+    presetFile: null,
+    preset: null,
+    /** Explicit track list; by default the categories in `rules.pool` (official, community) are used. */
+    tracks: null,
+    countdownSeconds: 3,
+    /** Racers must have the track loaded within this time, otherwise they sit the round out. */
+    loadGraceSeconds: 30,
+    /** A disconnected racer keeps their seat this long (and is DNF for a live round after it). */
+    disconnectGraceSeconds: 15,
+    /** Late finish reports after the finish window are still accepted this long (latency). */
+    lateFinishGraceMs: 1500,
+    /**
+     * Safety net for an always-on lobby: a live round ends `multiplier` x WR (at least
+     * `minimumSeconds`, `withoutWrSeconds` when no WR is known) after GO even if nobody finished.
+     * `enabled: false` keeps PolyCup's behaviour (the round lasts until everyone finished or retired).
+     */
+    roundLimit: { enabled: true, multiplier: 4, minimumSeconds: 120, withoutWrSeconds: 300 },
     /** Pause between a cup's end and the next one. */
     breakSeconds: 20,
     /** An idle lobby forgets its standings after this long without players. */
     idleResetSeconds: 300,
+    /** World records (warmup length, the WR line of the HUD) come from PolyTrack's leaderboard. */
+    worldRecords: { enabled: true, cacheSeconds: 900, timeoutMs: 8000, origin: "https://app-polytrack-desktop.polymodloader.com" },
   },
   /**
    * Opt-in proxy for PolyTrack's official backend so a self-hosted game copy keeps leaderboards and
@@ -167,4 +184,69 @@ export function loadConfig(argv = process.argv.slice(2), env = process.env) {
   // Divisions given as JSON cannot express -Infinity; treat a missing/ null min as -Infinity.
   cfg.rating.divisions = cfg.rating.divisions.map((d) => ({ ...d, min: d.min == null ? -Infinity : d.min }));
   return cfg;
+}
+
+/** PolyCup preset rules (format "polycup-preset", schema 1) the cup runs with unless configured otherwise. */
+export const CUP_RULES = Object.freeze({
+  allowRacerChanges: true,
+  allowSpectatorFreecam: true,
+  uploadLeaderboardTimes: true,
+  roundsPerTrack: 4,
+  pointsToWin: 120,
+  finalist: false,
+  points: [10, 8, 6, 5, 4, 3, 2, 1],
+  selection: "random",
+  bansPerRacer: 0,
+  picksPerRacer: 0,
+  pool: ["official", "community"],
+  warmup: "first-visit",
+  warmupTiming: "wr",
+  warmupSeconds: 90,
+  warmupMultiplier: 1.4,
+  warmupMinimumSeconds: 30,
+  readyEndsWarmup: true,
+  finishTimeoutSeconds: 10,
+  roundBreakSeconds: 5,
+});
+
+const clampInt = (v, min, max, def) => (Number.isFinite(Number(v)) ? Math.min(max, Math.max(min, Math.round(Number(v)))) : def);
+
+/**
+ * Resolve the cup rules: defaults <- `cup.rules` <- `cup.preset` / `cup.presetFile` (PolyCup preset
+ * JSON, `rules` object inside). Values are validated the way PolyCup does, out-of-range ones fall back.
+ * @param {object} cupCfg
+ * @param {(file: string) => string} [readFile]
+ */
+export function resolveCupRules(cupCfg = {}, readFile = (f) => fs.readFileSync(path.resolve(f), "utf8")) {
+  let preset = cupCfg.preset ?? null;
+  if (cupCfg.presetFile) {
+    const parsed = JSON.parse(readFile(cupCfg.presetFile));
+    if (parsed?.format !== "polycup-preset") throw new Error(`${cupCfg.presetFile} is not a PolyCup preset`);
+    preset = parsed;
+  }
+  const given = { ...(cupCfg.rules ?? {}), ...(preset?.rules ?? preset ?? {}) };
+  const r = { ...CUP_RULES, ...given };
+  const out = {
+    allowRacerChanges: r.allowRacerChanges !== false,
+    allowSpectatorFreecam: r.allowSpectatorFreecam !== false,
+    uploadLeaderboardTimes: r.uploadLeaderboardTimes !== false,
+    roundsPerTrack: clampInt(r.roundsPerTrack, 1, 30, CUP_RULES.roundsPerTrack),
+    pointsToWin: clampInt(r.pointsToWin, 1, 10000, CUP_RULES.pointsToWin),
+    finalist: r.finalist === true,
+    points: Array.isArray(r.points) && r.points.length ? r.points.map((n, i) => clampInt(n, 0, 1000, CUP_RULES.points[i] ?? 0)) : [...CUP_RULES.points],
+    selection: "random",
+    bansPerRacer: 0,
+    picksPerRacer: 0,
+    pool: Array.isArray(r.pool) && r.pool.length ? [...new Set(r.pool.filter((k) => ["official", "community", "custom"].includes(k)))] : [...CUP_RULES.pool],
+    warmup: ["off", "first-visit", "every-visit"].includes(r.warmup) ? r.warmup : CUP_RULES.warmup,
+    warmupTiming: ["wr", "fixed"].includes(r.warmupTiming) ? r.warmupTiming : CUP_RULES.warmupTiming,
+    warmupSeconds: clampInt(r.warmupSeconds, 10, 600, CUP_RULES.warmupSeconds),
+    warmupMultiplier: Number.isFinite(Number(r.warmupMultiplier)) ? Math.min(5, Math.max(0.5, Number(r.warmupMultiplier))) : CUP_RULES.warmupMultiplier,
+    warmupMinimumSeconds: clampInt(r.warmupMinimumSeconds, 10, 300, CUP_RULES.warmupMinimumSeconds),
+    readyEndsWarmup: r.readyEndsWarmup !== false,
+    finishTimeoutSeconds: clampInt(r.finishTimeoutSeconds, 1, 120, CUP_RULES.finishTimeoutSeconds),
+    roundBreakSeconds: clampInt(r.roundBreakSeconds, 1, 60, CUP_RULES.roundBreakSeconds),
+  };
+  if (!out.pool.length) out.pool = [...CUP_RULES.pool];
+  return out;
 }

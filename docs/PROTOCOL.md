@@ -20,6 +20,10 @@ PolyTrack race-time frames, i.e. milliseconds.
 | `leaderboard_get` | `queue` | |
 | `cup_join` | `vanilla` | a seat in the always-on cup; answered with `match_found` (`format.cup = true`) |
 | `cup_leave` | | (`leave_match` works too) |
+| `cup_round_ready` | `sessionId`, `pb` | the game created its in-game state for the round's session (`pb`: the player's best on the track in frames, `null` for none, may be sent again when a better one is found) |
+| `cup_warmup_ready` | `sessionId` | done practising; when every racer is ready the warmup ends |
+| `cup_checkpoint` | `sessionId`, `index`, `frames` | live-round progress (round time at checkpoint `index`) |
+| `cup_dnf` | `sessionId` | retire from the live round |
 
 Binary `CAR_UPDATE` (type byte `1`):
 `u8 type | u32 sessionId | u32 resetCounter | u16 count | count × { u16 len, bytes }`.
@@ -47,16 +51,21 @@ Each `bytes` blob is a car state in the game's own multiplayer encoding
 | `server_message` | `text` (shown as an in-game toast) |
 | `pong` | `t`, `serverTime` |
 | `leaderboard` | `queue`, `entries[] {position, id, nickname, countryCode, rating, matches, wins, losses, division}` |
-| `cup_state` | `cup` – the lobby: `{name, phase, cupNumber, round, trackRounds, roundsPerTrack, target, pointsTable, minPlayers, maxPlayers, track, players[], standings[] {slot, id, nickname, points, place, connected}, startsAt, endsAt, nextAt, lastWinner}` (sent to members on every change) |
+| `cup_state` | `cup` – the lobby: `{name, phase (idle, break, loading, warmup, countdown, racing, complete), cupNumber, round, trackRounds, roundsPerTrack, rules {target, points, finishTimeoutSeconds, roundBreakSeconds, warmup…, allowSpectatorFreecam, uploadLeaderboardTimes}, gameMode, minPlayers, maxPlayers, track {…, category, wr {status, frames, nickname, countryCode}, tr {frames, slots, nicknames}}, lastTrack, players[] {slot, id, nickname, countryCode, carStyle, connected, racing, pending, points, pb}, standings[] {slot, id, nickname, points, place, connected}, live {sessionId, racers[], ready[], warmup, warmupMs, warmupReady[], warmupEndsAt, startsAt, deadline, limitAt, finishes {slot: frames}, dnfs[], splits {slot: {index, frames, bestFrames}}, movement {slot: places}}, lastRound {round, trackId, finishes, points, dnfs, movement, results[]}, winner, nextAt, lastWinner, serverTime}` (sent to members on every change, including every checkpoint) |
 | `cup_end` | `cupNumber`, `winner {slot, id, nickname, points}`, `standings[]`, `scores`, `rounds`, `nextCupIn`, `nextAt`, `nextTrack`, `players` |
 
 ### The always-on cup
 
 The cup is a permanent lobby (`matchId = "cup"`) that reuses the match messages:
 `cup_join` answers with `match_found` (`format = {scoring: "points", cup: true,
-target, roundsPerTrack, pointsTable}`, plus the lobby in `cup`), the client loads
+live: true, gameMode, target, roundsPerTrack, pointsTable}`, plus the lobby in
+`cup`, and – while a round runs – its `phase` and `sessionId` so the newcomer can
+watch it), the client loads
 the track and sends `match_ready`; rounds then arrive as `round_start` /
-`round_end` (with `cupOver` and, before a track change, `nextTrack` to preload)
+`round_start` carries `warmup`, `warmupMs`, `gameMode`, `racers[]` and
+`loadGraceMs` instead of a round clock (the schedule lives in `cup_state.live`:
+`warmupEndsAt`, `startsAt`, `deadline`, `limitAt`); `round_end` (with `cupOver`
+and, before a track change, `nextTrack` to preload)
 whenever enough loaded racers are present. Players who join during a round take
 part from the next one. A winner ends the cup with `cup_end`; after `nextCupIn`
 the standings reset and the next cup's `round_start` follows by itself. `welcome`

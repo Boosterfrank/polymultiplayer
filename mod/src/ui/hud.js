@@ -20,9 +20,6 @@ export class MatchHud {
     this._toastTimer = null;
     this._timer = null;
     this.enabled = true;
-    this.cup = null;
-    this.lobbyEl = null;
-    this.lobbyCountdownEl = null;
   }
 
   dispose() {
@@ -50,7 +47,6 @@ export class MatchHud {
 
   hide() {
     this.match = null;
-    this.cup = null;
     this.root.classList.add("hidden");
     this.hideOverlay();
     this.stopTimer();
@@ -131,21 +127,8 @@ export class MatchHud {
 
   roundLabel() {
     const f = this.match.format;
-    if (f.cup) {
-      if (!this.round) return this.cup?.phase === "idle" ? "Waiting for racers" : "Waiting for the next round";
-      const block = this.cup?.roundsPerTrack ? ` (${this.cup.trackRounds}/${this.cup.roundsPerTrack})` : "";
-      return `Round ${this.round}${block} · first to ${f.target}`;
-    }
     if (!this.round) return "Loading…";
     return `Round ${this.round} · ${f.roundsToWin ? `first to ${f.roundsToWin}` : `of ${f.maxRounds}`}`;
-  }
-
-  /** Cup lobby details (from cup_state / round_start) shown in the card and the lobby overlay. */
-  setCup(cup) {
-    this.cup = cup;
-    if (cup?.players) this.setPlayers(cup.players);
-    else this.render();
-    if (this.lobbyEl) this.renderLobby();
   }
 
   render() {
@@ -183,12 +166,10 @@ export class MatchHud {
   }
 
   renderTimer() {
-    if (this.lobbyCountdownEl) this.lobbyCountdownEl.textContent = this.lobbyCountdownText();
     if (!this.timerEl || !this.match) return;
     const now = this.serverNow();
     if (!this.round) {
-      const nextAt = this.cup?.nextAt;
-      this.timerEl.textContent = nextAt && nextAt > now ? `in ${Math.ceil((nextAt - now) / 1000)}` : "";
+      this.timerEl.textContent = "";
       return;
     }
     if (now < this.startsAt) {
@@ -244,75 +225,5 @@ export class MatchHud {
   hideOverlay() {
     this.overlay.classList.add("hidden");
     clearChildren(this.overlay);
-    this.lobbyEl = null;
-    this.lobbyCountdownEl = null;
-  }
-
-  // ------------------------------------------------------------- cup
-
-  standingsTable(standings, { showPlace = true } = {}) {
-    const table = el("table");
-    for (const s of standings) {
-      table.appendChild(
-        el("tr", { className: s.slot === this.you ? "self" : "" }, [
-          showPlace ? el("td", { className: "pr-place", text: s.place != null ? `${s.place}.` : "" }) : null,
-          el("td", { text: s.nickname + (s.connected === false ? " (reconnecting)" : "") }),
-          el("td", { className: "pr-right", text: `${s.points} pts` }),
-        ]),
-      );
-    }
-    return table;
-  }
-
-  lobbyCountdownText() {
-    const cup = this.cup;
-    if (!cup) return "";
-    const now = this.serverNow();
-    if (cup.phase === "idle") return cup.players.length < cup.minPlayers ? `${cup.players.length}/${cup.minPlayers} racers – waiting for more` : "Waiting for racers to load";
-    const at = cup.phase === "starting" || cup.phase === "results" || cup.phase === "complete" ? cup.nextAt : cup.startsAt;
-    if (!at) return "";
-    const secs = Math.max(0, Math.ceil((at - now) / 1000));
-    if (cup.phase === "complete") return `Next cup starts in ${secs} s`;
-    if (cup.phase === "countdown" || cup.phase === "racing" || cup.phase === "closing") return `Round ${cup.round} is running – you join the next one`;
-    return `${cup.round ? "Next round" : "Round 1"} starts in ${secs} s`;
-  }
-
-  /** Lobby overlay while waiting for the next round (in the menu). */
-  showCupLobby(cup, { onLeave, onHide }) {
-    this.cup = cup;
-    clearChildren(this.overlay);
-    const box = el("div", { className: "pr-box pr-lobby" }, [el("h2", { text: cup.name })]);
-    this.lobbyEl = el("div");
-    box.appendChild(this.lobbyEl);
-    box.appendChild(el("div", { className: "pr-buttons" }, [this.button("Hide", onHide), this.button("Leave the cup", onLeave)]));
-    this.overlay.appendChild(box);
-    this.overlay.classList.remove("hidden");
-    this.renderLobby();
-  }
-
-  renderLobby() {
-    if (!this.lobbyEl || !this.cup) return;
-    const cup = this.cup;
-    clearChildren(this.lobbyEl);
-    this.lobbyEl.appendChild(el("div", { className: "pr-lobby-status", text: `You are in · ${cup.players.length} racer${cup.players.length === 1 ? "" : "s"} · first to ${cup.target} points · new track every ${cup.roundsPerTrack} rounds${cup.track?.name ? ` · now: ${cup.track.name}` : ""}` }));
-    this.lobbyCountdownEl = el("div", { className: "pr-lobby-countdown", text: this.lobbyCountdownText() });
-    this.lobbyEl.appendChild(this.lobbyCountdownEl);
-    if (cup.standings?.length) this.lobbyEl.appendChild(el("div", { className: "pr-section" }, [this.standingsTable(cup.standings)]));
-  }
-
-  /** Cup over: winner and final standings, the next cup starts by itself. */
-  showCupEnd(msg, { onLeave, onHide }) {
-    clearChildren(this.overlay);
-    const won = msg.winner?.slot === this.you;
-    const box = el("div", { className: "pr-box" }, [
-      el("h2", { text: `Cup #${msg.cupNumber} over` }),
-      el("div", { className: "pr-result " + (won ? "win" : "loss"), text: won ? "YOU WIN THE CUP!" : `${msg.winner?.nickname ?? "?"} wins the cup` }),
-      el("div", { className: "pr-section" }, [this.standingsTable(msg.standings ?? [])]),
-    ]);
-    this.lobbyCountdownEl = el("div", { className: "pr-lobby-countdown", text: this.lobbyCountdownText() });
-    box.appendChild(this.lobbyCountdownEl);
-    box.appendChild(el("div", { className: "pr-buttons" }, [this.button("Stay for the next cup", onHide), this.button("Leave the cup", onLeave)]));
-    this.overlay.appendChild(box);
-    this.overlay.classList.remove("hidden");
   }
 }

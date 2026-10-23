@@ -1,0 +1,38 @@
+{
+  "format": "polycup-preset",
+  "schema": 1,
+  "name": "Quickplay Cup",
+  "rules": {
+    "allowRacerChanges": true,
+    "allowSpectatorFreecam": true,
+    "uploadLeaderboardTimes": true,
+    "roundsPerTrack": 4,
+    "pointsToWin": 120,
+    "finalist": false,
+    "points": [
+      10,
+      8,
+      6,
+      5,
+      4,
+      3,
+      2,
+      1
+    ],
+    "selection": "random",
+    "bansPerRacer": 0,
+    "picksPerRacer": 0,
+    "pool": [
+      "official",
+      "community"
+    ],
+    "warmup": "first-visit",
+    "warmupTiming": "wr",
+    "warmupSeconds": 90,
+    "warmupMultiplier": 1.4,
+    "warmupMinimumSeconds": 30,
+    "readyEndsWarmup": true,
+    "finishTimeoutSeconds": 10,
+    "roundBreakSeconds": 5
+  }
+}

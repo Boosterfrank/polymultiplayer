@@ -7,12 +7,9 @@ import { Emitter, log, safe } from "./util.js";
  * Drives one ranked match on the client: loads the track, hands the game a RankedConnection,
  * keeps the countdown gate, mirrors server events into the game and the HUD.
  *
- * The always-on cup uses the same messages (match_found with `format.cup`, round_start, ...) plus
- * cup_state / cup_end; while waiting for a round the player sees a lobby overlay in the menu and
- * the game is only started with the first round_start.
+ * Messages of the always-on cup (match_found with `format.cup`) are the CupController's.
  *
- * Events: "started" (match info), "ended" ({matchEnd}), "left" ({cup}), "leftCup", "cupEnd",
- * "cupState", "queueAgain", "error" (text)
+ * Events: "started" (match info), "ended" ({matchEnd}), "left", "queueAgain", "error" (text)
  */
 export class MatchController extends Emitter {
   constructor({ client, bridge, game, hud, popups }) {
@@ -34,7 +31,6 @@ export class MatchController extends Emitter {
     this.countdownOpen = false;
     this._countdownTimer = null;
     this.matchEnd = null;
-    this.cup = null; // cup lobby state (match_found.cup / cup_state) when this "match" is the cup
     this.prefetched = null; // {id, track} loaded ahead of a track change
     this._unsubs = [];
     this.listen();
@@ -61,8 +57,6 @@ export class MatchController extends Emitter {
     on(MSG.MATCH_END, (msg) => this.onMatchEnd(msg));
     on(MSG.PLAYER_LEFT, (msg) => this.onPlayerLeft(msg));
     on(MSG.PLAYER_STATUS, (msg) => this.onPlayerStatus(msg));
-    on(MSG.CUP_STATE, (msg) => this.onCupState(msg));
-    on(MSG.CUP_END, (msg) => this.onCupEnd(msg));
     on(MSG.PINGS, (msg) => this.connection?.setPings(msg.pings));
     on(MSG.CAR_RESET, (msg) => this.connection?.handleCarReset(msg.sessionId, msg.slot, msg.resetCounter));
     on(MSG.SERVER_MESSAGE, (msg) => this.connection?.serverMessage(msg.text));
@@ -84,6 +78,7 @@ export class MatchController extends Emitter {
   // ------------------------------------------------------------- match found / resume
 
   async onMatchFound(msg) {
+    if (msg.format?.cup) return;
     if (this.active && this.match.matchId !== msg.matchId) {
       log.warn("received a new match while one is active; abandoning the old one");
       this.cleanup();
@@ -93,12 +88,7 @@ export class MatchController extends Emitter {
     this.phase = "loading";
     this.round = 0;
     this.gameStarted = false;
-    this.cup = msg.format?.cup ? msg.cup : null;
     this.hud.show(msg, msg.you);
-    if (this.cup) {
-      this.hud.setCup(this.cup);
-      this.showLobby();
-    }
     this.emit("started", msg);
     try {
       this.track = await resolveTrack(this.bridge, this.game, msg.track);
@@ -115,17 +105,13 @@ export class MatchController extends Emitter {
   }
 
   async onMatchResume(msg) {
+    if (msg.format?.cup) return;
     log.info("resuming match", msg.matchId, "phase", msg.phase);
     this.cleanup({ keepHud: false });
     this.match = msg;
     this.matchEnd = null;
     this.phase = msg.phase === "finished" ? "finished" : "loading";
-    this.cup = msg.format?.cup ? msg.cup : null;
     this.hud.show(msg, msg.you);
-    if (this.cup) {
-      this.hud.setCup(this.cup);
-      if (!(msg.round > 0)) this.showLobby();
-    }
     try {
       this.track = await resolveTrack(this.bridge, this.game, msg.track);
     } catch (err) {
@@ -175,11 +161,6 @@ export class MatchController extends Emitter {
     this.startsAt = msg.startsAt;
     this.endsAt = msg.endsAt;
     this.phase = "countdown";
-    if (this.cup) {
-      if (msg.cup) this.cup = msg.cup;
-      this.hud.hideOverlay();
-      this.hud.setCup(this.cup);
-    }
     if (msg.players) this.connection.setPlayers(msg.players);
     this.hud.setPlayers(msg.players ?? this.match.players);
     this.hud.setRound(msg.round, msg.startsAt, msg.endsAt, msg.scores);
@@ -297,53 +278,6 @@ export class MatchController extends Emitter {
       .catch((err) => log.warn("could not preload the next track", err));
   }
 
-  // ------------------------------------------------------------- cup
-
-  showLobby() {
-    if (!this.cup) return;
-    this.hud.showCupLobby(this.cup, { onLeave: () => this.leaveCup(), onHide: () => this.hud.hideOverlay() });
-  }
-
-  onCupState(msg) {
-    if (!this.isSameMatch(msg) || !this.cup || !msg.cup) return;
-    const before = this.cup.phase;
-    this.cup = msg.cup;
-    this.hud.setCup(msg.cup);
-    this.connection?.setPlayers(msg.cup.players);
-    if (this.gameStarted && msg.cup.phase === "idle" && before !== "idle") this.hud.showToast("Waiting for more racers…", 6000);
-    this.emit("cupState", msg.cup);
-  }
-
-  onCupEnd(msg) {
-    if (!this.isSameMatch(msg) || !this.cup) return;
-    this.phase = "cupBreak";
-    this.stopCountdown();
-    this.connection?.endSession(this.sessionId);
-    this.hud.setScores(msg.scores);
-    if (msg.players) {
-      this.match.players = msg.players;
-      this.connection?.setPlayers(msg.players);
-    }
-    this.cup = { ...this.cup, phase: "complete", nextAt: msg.nextAt, standings: msg.standings, lastWinner: msg.winner, players: msg.players ?? this.cup.players };
-    this.hud.setCup(this.cup);
-    if (msg.nextTrack) this.prefetchTrack(msg.nextTrack);
-    this.hud.showCupEnd(msg, { onLeave: () => this.leaveCup(), onHide: () => this.hud.hideOverlay() });
-    this.emit("cupEnd", msg);
-  }
-
-  /** Leave the cup: from the game (Exit path) or from the lobby. */
-  leaveCup() {
-    if (!this.cup) return;
-    const matchId = this.match?.matchId;
-    if (this.gameStarted) {
-      this.leaveToMenu(false);
-    } else {
-      this.client.send({ type: MSG.CUP_LEAVE, matchId });
-      this.cleanup();
-    }
-    this.emit("leftCup");
-  }
-
   onMatchEnd(msg) {
     if (!this.isSameMatch(msg)) return;
     this.phase = "finished";
@@ -381,9 +315,9 @@ export class MatchController extends Emitter {
   onConnectionDisposed(connection) {
     if (connection !== this.connection) return;
     if (this.active) {
-      log.info(this.cup ? "left the cup" : "left the match");
+      log.info("left the match");
       this.client.send({ type: MSG.LEAVE_MATCH, matchId: this.match.matchId });
-      this.emit("left", { cup: !!this.cup });
+      this.emit("left");
     }
     this.cleanup();
   }
@@ -412,7 +346,6 @@ export class MatchController extends Emitter {
     if (connection && !connection.disposed) connection.dispose();
     this.match = null;
     this.track = null;
-    this.cup = null;
     this.prefetched = null;
     this.phase = "idle";
     this.round = 0;

@@ -73,7 +73,9 @@ export function installCupButton({ onJoin, onLeave, fetchState, localState, serv
   const statusText = (local) => {
     if (local.notice) return local.notice;
     if (local.inCup) {
-      if (local.phase === "racing" || local.phase === "countdown") return "You are in the cup – the round is running";
+      if (local.phase === "warmup") return local.racing ? "You are in the cup – warmup" : "You are in the cup – you race from the next round";
+      if (local.phase === "racing" || local.phase === "countdown") return local.racing ? "You are in the cup – live round" : "You are in the cup – watching this round, you race the next one";
+      if (local.phase === "complete") return "You are in the cup – the next cup starts shortly";
       return "You are in the cup – waiting for the next round";
     }
     if (unreachable && !state) return "Cup server unreachable – check the server address in the Ranked menu";
@@ -84,17 +86,18 @@ export function installCupButton({ onJoin, onLeave, fetchState, localState, serv
     const leader = state.standings?.[0];
     const lead = leader && leader.points > 0 ? ` · ${leader.nickname} leads with ${leader.points} pts` : "";
     const track = state.track?.name ? ` on ${state.track.name}` : "";
+    const roundInfo = `round ${state.round} (${state.trackRounds}/${state.roundsPerTrack})`;
     switch (state.phase) {
       case "idle":
         return n === 0 ? `Always on · nobody racing right now – be the first (first to ${state.target} pts)` : `${n} waiting for racers${track} · ${state.minPlayers} needed to start`;
-      case "starting":
-        return `${n} racing${track} · round ${state.round + 1} starts in ${formatSeconds((state.nextAt - now) / 1000)}`;
+      case "break":
+        return `${n} racing${track} · ${state.round ? `next round in ${formatSeconds((state.nextAt - now) / 1000)}` : `round 1 starts in ${formatSeconds((state.nextAt - now) / 1000)}`}${lead}`;
+      case "loading":
+      case "warmup":
+        return `${n} racing${track} · ${state.phase === "warmup" ? "warmup before" : "loading"} ${roundInfo}${lead} · join now and race this round's successor`;
       case "countdown":
       case "racing":
-      case "closing":
-        return `${n} racing${track} · round ${state.round} (${state.trackRounds}/${state.roundsPerTrack})${lead} · join for the next round`;
-      case "results":
-        return `${n} racing${track} · round ${state.round} just ended${lead} · next round in ${formatSeconds((state.nextAt - now) / 1000)}`;
+        return `${n} racing${track} · live ${roundInfo}${lead} · join to watch and race the next round`;
       case "complete":
         return `Cup #${state.cupNumber} won by ${state.lastWinner?.nickname ?? "?"} · next cup starts in ${formatSeconds((state.nextAt - now) / 1000)}`;
       default:

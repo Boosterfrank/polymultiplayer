@@ -80,16 +80,45 @@ tier 1, Silver → tier ≤ 2, Gold → ≤ 3, Master+ → all tiers.
 ## The always-on Quickplay Cup
 
 Besides ranked matches the server keeps one permanent lobby (`server/src/cup.js`,
-config `cup`). It never closes: players join and leave whenever they like from a
-*Join the Cup* box on the game's own multiplayer page, rounds run on a schedule
-as long as `minPlayers` loaded racers are present, every `roundsPerTrack` rounds
-a new random track is drawn (announced one round ahead so clients preload it),
-places score `pointsTable` (10/8/6/5/4/3/2/1, DNF 0, exact ties share the
-place), and the first player at or above `target` with a unique lead wins; after
-`breakSeconds` the standings reset and the next cup starts by itself. Late
-joiners race from the next round at zero points; leavers keep their points for a
-comeback until the lobby has been empty for `idleResetSeconds`. The cup does not
-touch ratings; wins are counted separately (`GET /api/cup/leaderboard`).
+config `cup`) that follows PolyCup's rules (`cup.rules` is a PolyCup preset). It
+never closes: players join and leave whenever they like from a *Join the Cup* box
+on the game's own multiplayer page. Phases: `idle` → `break` (`roundBreakSeconds`)
+→ `loading` (`round_start`; every racer's game reports `cup_round_ready`, late ones
+sit the round out after `loadGraceSeconds`) → `warmup` (first visit of a track:
+WR × `warmupMultiplier`, at least `warmupMinimumSeconds`, `warmupSeconds` without a
+WR; `cup_warmup_ready` from everyone ends it early) → `countdown` (3 s) → `racing`
+→ `break` … until someone is at `pointsToWin` with a unique lead → `complete`
+(`breakSeconds`) → reset.
+
+A live round: everybody's clock starts at `startsAt` (GO). Clients report
+`cup_checkpoint` (index + round time) and the finish (`record`, first one counts,
+validated against the time since GO); the first finish sets the deadline
+`finish + finishTimeoutSeconds`, `cup_dnf` retires, and a round nobody finishes
+ends at the `roundLimit` safety net. Places score `points` (10/8/6/5/4/3/2/1, DNF
+0, exact ties share), the cup's track record (TR) and the live ranking (finishers
+by time, then checkpoint progress with ▲/▼ movement, DNF last –
+`shared/cupstandings.js`) are part of every `cup_state`. Late joiners are
+`pending`: they get the running session (`match_found` with `phase`/`sessionId`)
+and watch it, racing from the next round at zero points; leavers keep their points
+for a comeback until the lobby has been empty for `idleResetSeconds`. World
+records come from PolyTrack's leaderboard (`server/src/worldrecords.js`, with the
+PolyModLoader desktop origin, cached). The cup does not touch ratings; wins are
+counted separately (`GET /api/cup/leaderboard`).
+
+On the client (`mod/src/cup/controller.js`, `mod/src/game.js`) the round is one
+game session started with `startGame` directly so the track category is right
+(uploads to the leaderboard count as verified). The game's own control gate and
+restart routine are wrapped: controls are held until GO, `car.start()` runs the
+clock from GO, the restart key retires (`cup_dnf`), a checkpoint reset before the
+first checkpoint restarts the run with the time spent so far added to every
+report (`timeOffset`), and the warmup leaves restarts to the game. Finished,
+retired and pending players follow another racer's car with that car's own orbit
+camera (the game only updates the local car's cameras, so the mod updates the
+watched one), or the game's free camera. The overlay (`mod/src/cup/hud.js`) is
+laid out like PolyCup's: track/round/phase, WR and TR strips, ROUND RANKING / CUP
+STANDINGS, the finish-window timer, the 3-2-1-GO cue, warmup controls, the
+spectator selector with the watched racer's PB, and the "retire" wording in the
+game's own reset hint.
 
 ## Rating
 
@@ -117,9 +146,11 @@ session). Everything else client-side is trusted – it is a browser game mod.
 ## Repository layout
 
 ```
-manifest.json, 0.2.1/        PML install layout (install URL = repo root)
-mod/src/                     mod source (bundled with esbuild into 0.2.1/main.mod.js)
+manifest.json, 0.3.0/        PML install layout (install URL = repo root)
+mod/src/                     mod source (bundled with esbuild into 0.3.0/main.mod.js)
+mod/src/cup/, mod/src/game.js   the cup on the client: round flow, game hooks, PolyCup-style HUD
 shared/protocol.js           message names + binary framing shared by mod and server
+shared/cupstandings.js       cup ranking (live race order, places, movement) shared by server and HUD
 server/                      Node.js server (`npm start`), tests (`npm test`)
 mods/                        third-party mods ported to 0.6.3 for the game copy (see mods/README.md)
 tools/build-site.mjs         builds the self-contained game copy with all built-in mods

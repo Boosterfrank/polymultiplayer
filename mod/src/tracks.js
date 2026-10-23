@@ -61,5 +61,7 @@ export async function resolveTrack(bridge, game, info) {
   if (typeof result.trackData.hasStartingPoint === "function" && !result.trackData.hasStartingPoint()) {
     throw new Error("track has no starting point");
   }
-  return { trackMetadata: result.trackMetadata, trackData: result.trackData };
+  // The category decides whether the game treats times as verified leaderboard entries.
+  const category = entry?.category ?? (["official", "community", "custom"].includes(info.category) ? info.category : "custom");
+  return { trackMetadata: result.trackMetadata, trackData: result.trackData, category, id: info.id ?? null };
 }

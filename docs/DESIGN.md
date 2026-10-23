@@ -77,6 +77,20 @@ Teams are balanced with a snake draft on rating. The track is picked from the
 pool allowed for the **lowest-rated player's division** (TM rule): Bronze →
 tier 1, Silver → tier ≤ 2, Gold → ≤ 3, Master+ → all tiers.
 
+## The always-on Quickplay Cup
+
+Besides ranked matches the server keeps one permanent lobby (`server/src/cup.js`,
+config `cup`). It never closes: players join and leave whenever they like from a
+*Join the Cup* box on the game's own multiplayer page, rounds run on a schedule
+as long as `minPlayers` loaded racers are present, every `roundsPerTrack` rounds
+a new random track is drawn (announced one round ahead so clients preload it),
+places score `pointsTable` (10/8/6/5/4/3/2/1, DNF 0, exact ties share the
+place), and the first player at or above `target` with a unique lead wins; after
+`breakSeconds` the standings reset and the next cup starts by itself. Late
+joiners race from the next round at zero points; leavers keep their points for a
+comeback until the lobby has been empty for `idleResetSeconds`. The cup does not
+touch ratings; wins are counted separately (`GET /api/cup/leaderboard`).
+
 ## Rating
 
 Per-queue Elo. `K = 40` for the first `placementMatches` (5), then `20`.
@@ -109,6 +123,6 @@ shared/protocol.js           message names + binary framing shared by mod and se
 server/                      Node.js server (`npm start`), tests (`npm test`)
 mods/                        third-party mods ported to 0.6.3 for the game copy (see mods/README.md)
 tools/build-site.mjs         builds the self-contained game copy with all built-in mods
-test/e2e/                    headless-Chromium tests against the real game build
+test/e2e/                    headless-Chromium tests against the real game build (ranked match, cup, site smoke)
 docs/                        this file, PROTOCOL.md
 ```

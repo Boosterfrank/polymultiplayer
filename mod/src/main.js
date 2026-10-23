@@ -7,6 +7,7 @@ import { getSecret, loadSettings, saveSettings } from "./identity.js";
 import { MatchController } from "./match.js";
 import { injectStyles } from "./ui/styles.js";
 import { installMainMenuButton } from "./ui/mainmenu.js";
+import { installCupButton } from "./ui/cupbutton.js";
 import { RankedMenu } from "./ui/menu.js";
 import { MatchHud } from "./ui/hud.js";
 import { log } from "./util.js";
@@ -73,6 +74,9 @@ class PolyRankedApp {
     this.controller = null;
     this.removeMenuButton = null;
     this.pendingQueue = null;
+    this.pendingCupJoin = false;
+    this.cupNotice = null;
+    this.cupButton = null;
   }
 
   start() {
@@ -82,6 +86,13 @@ class PolyRankedApp {
     this.hud.setEnabled(this.settings.showHud !== false);
     this.controller = new MatchController({ client: this.client, bridge: this.bridge, game: this.game, hud: this.hud });
     this.removeMenuButton = installMainMenuButton(() => this.toggleMenu());
+    this.cupButton = installCupButton({
+      onJoin: () => this.joinCup(),
+      onLeave: () => this.controller.leaveCup(),
+      fetchState: () => this.fetchCupState(),
+      localState: () => ({ inCup: !!this.controller.cup && this.controller.active, phase: this.controller.cup?.phase ?? null, notice: this.cupNotice }),
+      serverNow: () => this.client.serverNow(),
+    });
     this.onKeyDown = (ev) => {
       if (ev.code === "F7" && !ev.repeat) {
         ev.preventDefault();
@@ -198,11 +209,71 @@ class PolyRankedApp {
   }
 
   toggleMenu() {
-    if (this.controller.active && !this.menu.isOpen) {
+    if (this.controller.active && !this.menu.isOpen && (this.controller.gameStarted || !this.controller.cup)) {
       // Do not cover the game while racing; the HUD shows the match state.
       return;
     }
     this.menu.toggle();
+  }
+
+  // ------------------------------------------------------------- cup
+
+  httpBase() {
+    return String(this.settings.serverUrl ?? "")
+      .trim()
+      .replace(/^wss:/i, "https:")
+      .replace(/^ws:/i, "http:")
+      .replace(/\/+$/, "");
+  }
+
+  async fetchCupState() {
+    const base = this.httpBase();
+    if (!/^https?:/.test(base)) return null;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4000);
+    try {
+      const res = await fetch(`${base}/api/cup`, { cache: "no-store", signal: controller.signal });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /** "Join the Cup" on the multiplayer page: connect if needed, then ask the server for a seat. */
+  joinCup() {
+    this.cupNotice = null;
+    if (this.controller.active) {
+      if (!this.controller.cup) this.cupNotice = "Finish your ranked match first";
+      this.cupButton?.refresh();
+      return;
+    }
+    const determinism = physicsDeterminism(this.bridge, this.game);
+    if (determinism === "pending") {
+      this.cupNotice = "The game is still running its physics self-test – try again in a few seconds";
+      this.cupButton?.refresh();
+      return;
+    }
+    if (!this.isVanilla()) {
+      const culprits = this.physicsMods();
+      this.cupNotice = culprits.length ? `The cup needs vanilla physics. Mods changing it: ${culprits.join(", ")}` : "The cup needs vanilla physics (the game's physics self-test failed)";
+      this.cupButton?.refresh();
+      return;
+    }
+    if (this.client.ready) this.sendCupJoin();
+    else {
+      this.pendingCupJoin = true;
+      this.cupNotice = "Connecting to the server…";
+      this.client.connect();
+    }
+    this.cupButton?.refresh();
+  }
+
+  sendCupJoin() {
+    this.pendingCupJoin = false;
+    this.client.send({ type: MSG.CUP_JOIN, vanilla: true });
   }
 
   wire() {
@@ -216,7 +287,16 @@ class PolyRankedApp {
           client.send({ type: MSG.QUEUE_JOIN, queue: this.pendingQueue });
           this.pendingQueue = null;
         }
+        if (this.pendingCupJoin) {
+          this.cupNotice = null;
+          this.sendCupJoin();
+        }
+        if (client.welcome?.cup) this.cupButton?.setState(client.welcome.cup);
+      } else if (state === "disconnected" && this.pendingCupJoin && detail) {
+        this.pendingCupJoin = false;
+        this.cupNotice = `Could not reach the server – ${detail}`;
       }
+      this.cupButton?.refresh();
     });
     client.on(MSG.QUEUE_STATUS, (msg) => menu.setQueueStatus(msg));
     client.on(MSG.LEADERBOARD, (msg) => menu.setLeaderboard(msg));
@@ -224,12 +304,19 @@ class PolyRankedApp {
     client.on("error", (msg) => {
       menu.setNotice(msg.message, "error");
       if (msg.code === "cannot_queue" || msg.code === "in_match") menu.setQueueStatus(null);
+      if (["cup_full", "cup_disabled", "cannot_queue", "in_match"].includes(msg.code) && !controller.active) {
+        this.cupNotice = msg.message;
+        this.cupButton?.refresh();
+      }
     });
     client.on(MSG.MATCH_FOUND, (msg) => {
       menu.setQueueStatus(null);
-      menu.setNotice(`Match found on ${msg.track?.name ?? "a track"} – loading…`);
+      this.cupNotice = null;
+      menu.setNotice(msg.format?.cup ? `Joined the ${msg.queueName ?? "cup"} – loading ${msg.track?.name ?? "the track"}…` : `Match found on ${msg.track?.name ?? "a track"} – loading…`);
       menu.close();
+      this.cupButton?.refresh();
     });
+    client.on(MSG.CUP_STATE, (msg) => this.cupButton?.setState(msg.cup));
     client.on(MSG.MATCH_END, (msg) => {
       const r = msg.ratings?.[controller.match?.you];
       if (r) {
@@ -251,6 +338,10 @@ class PolyRankedApp {
     menu.on("disconnect", () => client.disconnect());
     menu.on("queue", (queueId) => {
       menu.setNotice(null);
+      if (controller.cup) {
+        menu.setNotice("Leave the cup before queueing for ranked.", "error");
+        return;
+      }
       const determinism = physicsDeterminism(this.bridge, this.game);
       if (determinism === "pending") {
         menu.setNotice("The game is still running its physics self-test – try again in a few seconds.", "error");
@@ -285,7 +376,15 @@ class PolyRankedApp {
       menu.setNotice(text, "error");
       menu.open();
     });
-    controller.on("left", () => menu.setNotice("You left the match (counts as a loss)."));
+    controller.on("left", (info) => {
+      menu.setNotice(info?.cup ? "You left the cup." : "You left the match (counts as a loss).");
+      this.cupButton?.refresh();
+    });
+    controller.on("leftCup", () => {
+      menu.setNotice("You left the cup.");
+      this.cupButton?.refresh();
+    });
+    controller.on("cupState", () => this.cupButton?.refresh());
     controller.on("queueAgain", () => {
       const queueId = controller.matchEnd?.queueId ?? client.welcome?.queues?.[0]?.id;
       menu.open();

@@ -104,6 +104,36 @@ export class PlayerRegistry {
     return rows.slice(0, limit).map((r, i) => ({ position: i + 1, ...r }));
   }
 
+  /** Cup participation; `won` marks the winner of a completed cup. */
+  applyCupResult(id, { won, points }) {
+    const p = this.players[id];
+    if (!p) return null;
+    p.cup = p.cup ?? { cups: 0, wins: 0, points: 0 };
+    p.cup.cups += 1;
+    if (won) p.cup.wins += 1;
+    p.cup.points += Math.max(0, points | 0);
+    this.store.markDirty();
+    return p.cup;
+  }
+
+  cupLeaderboard(limit = 50) {
+    const rows = [];
+    for (const p of Object.values(this.players)) {
+      if (!p.cup || !p.cup.cups) continue;
+      rows.push({ id: p.id, nickname: p.nickname, countryCode: p.countryCode, cups: p.cup.cups, wins: p.cup.wins, points: p.cup.points });
+    }
+    rows.sort((a, b) => b.wins - a.wins || b.points - a.points || b.cups - a.cups);
+    return rows.slice(0, limit).map((r, i) => ({ position: i + 1, ...r }));
+  }
+
+  recordCup(summary, keep = 200) {
+    const data = this.store.data;
+    data.cups = data.cups ?? [];
+    data.cups.push(summary);
+    if (data.cups.length > keep) data.cups.splice(0, data.cups.length - keep);
+    this.store.markDirty();
+  }
+
   recordMatch(summary, keep = 500) {
     const list = this.store.data.matches;
     list.push(summary);

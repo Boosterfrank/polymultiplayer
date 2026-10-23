@@ -16,6 +16,8 @@ export const MSG = Object.freeze({
   LEAVE_MATCH: "leave_match",
   PING: "ping",
   LEADERBOARD_GET: "leaderboard_get",
+  CUP_JOIN: "cup_join",
+  CUP_LEAVE: "cup_leave",
   // server -> client
   WELCOME: "welcome",
   ERROR: "error",
@@ -34,6 +36,8 @@ export const MSG = Object.freeze({
   PONG: "pong",
   LEADERBOARD: "leaderboard",
   PROFILE: "profile",
+  CUP_STATE: "cup_state",
+  CUP_END: "cup_end",
 });
 
 /** First byte of binary frames. */

@@ -65,6 +65,20 @@ export const CSS = `
 .polyranked-overlay .pr-delta.up { color: #9cf59c; }
 .polyranked-overlay .pr-delta.down { color: #ff9696; }
 .polyranked-overlay .pr-buttons { display: flex; gap: 10px; justify-content: flex-end; padding: 10px; background: var(--surface-color, #28346a); }
+.polyranked-overlay .pr-lobby-status { font-size: 26px; text-align: center; padding: 10px 14px; }
+.polyranked-overlay .pr-lobby-countdown { font-size: 34px; text-align: center; padding: 0 0 10px 0; color: #ffe08a; }
+.polyranked-overlay .pr-winner { font-size: 40px; text-align: center; padding: 10px; color: #ffe08a; }
+.polyranked-overlay td.pr-place { width: 40px; opacity: 0.8; }
+.polyranked-overlay td.pr-right { text-align: right; }
+
+.polyranked-cup { position: absolute; left: 0; bottom: calc(100% + 16px); width: 700px; box-sizing: border-box; background: var(--surface-secondary-color, #212b58); font-family: ForcedSquare, Arial, sans-serif; color: var(--text-color, #fff); }
+.polyranked-cup .pr-cup-body { padding: 12px 16px 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+.polyranked-cup .pr-cup-title { display: flex; align-items: center; gap: 10px; font-size: 30px; }
+.polyranked-cup .pr-cup-title img { width: 34px; height: 34px; }
+.polyranked-cup .pr-cup-status { font-size: 19px; opacity: 0.85; min-height: 1.3em; }
+.polyranked-cup .pr-cup-status.err { color: #ff9696; opacity: 1; }
+.polyranked-cup .pr-cup-join { width: 100%; box-sizing: border-box; margin: 0; padding: 14px 20px; font-size: 38px; text-align: center; justify-content: center; }
+.polyranked-cup .pr-cup-join .button-icon { margin-right: 10px; }
 `;
 
 export function injectStyles() {

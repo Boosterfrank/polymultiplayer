@@ -232,6 +232,17 @@ try {
   check("enabled: its wheel positions are applied and ranked still counts the physics as vanilla", Math.abs(restoredState.wheelFR - 0.740905) < 1e-6 && restoredState.touchingPhysics === false && restoredState.rankedVanilla === true, JSON.stringify(restoredState));
   await enabled.page.screenshot({ path: path.join(artifacts, "site-main-menu.png") });
 
+  // the always-on cup: the game's multiplayer page gets the Join the Cup box with the live lobby state
+  // the game reveals its menu buttons with a delayed animation; click the button through the DOM
+  await enabled.page.evaluate(() => document.querySelector('button.button-image img[src="images/multiplayer.svg"]').closest("button").click());
+  const cupStatus = await waitFor("enabled: cup box", () => enabled.page.evaluate(() => {
+    const box = document.querySelector(".multiplayer-ui > .join .polyranked-cup");
+    const status = box?.querySelector(".pr-cup-status")?.textContent ?? "";
+    return box && /Always on|waiting|racing/.test(status) ? status : null;
+  }), 30000, 300);
+  check("enabled: the multiplayer page offers the always-on cup", /Always on/.test(cupStatus) && (await enabled.page.evaluate(() => document.querySelector(".polyranked-cup .pr-cup-join")?.textContent?.includes("Join the Cup"))), cupStatus);
+  await enabled.page.screenshot({ path: path.join(artifacts, "site-multiplayer-cup.png") });
+
   const errors = pages.flatMap((p) => p.logs.filter((l) => l.startsWith("[pageerror]")).map((l) => `${p.name}: ${l}`));
   check("no page errors", errors.length === 0, errors.slice(0, 2).join(" | ").slice(0, 200));
   exitCode = results.every(Boolean) ? 0 : 1;

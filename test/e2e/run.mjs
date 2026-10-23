@@ -10,138 +10,29 @@
  * and all other external hosts (kodub.com, polymodloader.com) are blocked, so the test is offline.
  */
 import fs from "node:fs";
-import http from "node:http";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { chromium } from "playwright-core";
-import { createServer } from "../../server/src/index.js";
-import { deepMerge, DEFAULT_CONFIG } from "../../server/src/config.js";
+import { createHarness, parseArgs } from "./harness.mjs";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const args = process.argv.slice(2);
-const argValue = (flag, def) => {
-  const i = args.indexOf(flag);
-  return i >= 0 ? args[i + 1] : def;
-};
-const gameDir = path.resolve(argValue("--game-dir", process.env.POLYTRACK_DIR ?? "/home/user/polytrackmods/polymodloader"));
-const headed = args.includes("--headed");
-const keep = args.includes("--keep");
-const artifacts = path.join(root, "e2e-artifacts");
-fs.mkdirSync(artifacts, { recursive: true });
-
-if (!fs.existsSync(path.join(gameDir, "main.bundle.js"))) {
-  console.error(`game directory ${gameDir} does not contain main.bundle.js`);
-  process.exit(2);
-}
-
-const MIME = { ".js": "application/javascript", ".json": "application/json", ".html": "text/html", ".png": "image/png", ".svg": "image/svg+xml", ".wasm": "application/wasm", ".woff2": "font/woff2", ".woff": "font/woff", ".ttf": "font/ttf", ".glb": "model/gltf-binary", ".track": "text/plain", ".mp3": "audio/mpeg", ".ogg": "audio/ogg", ".css": "text/css", ".jpg": "image/jpeg" };
-
-function staticServer(dir) {
-  return new Promise((resolve) => {
-    const srv = http.createServer((req, res) => {
-      const url = new URL(req.url, "http://x");
-      let file = path.join(dir, decodeURIComponent(url.pathname));
-      if (url.pathname === "/" ) file = path.join(dir, "index.html");
-      res.setHeader("Access-Control-Allow-Origin", "*");
-      if (!file.startsWith(dir) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
-        res.writeHead(404);
-        return res.end();
-      }
-      res.writeHead(200, { "Content-Type": MIME[path.extname(file)] ?? "application/octet-stream" });
-      fs.createReadStream(file).pipe(res);
-    });
-    srv.listen(0, "127.0.0.1", () => resolve({ srv, port: srv.address().port }));
-  });
-}
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-async function waitFor(label, fn, timeoutMs = 60000, interval = 250) {
-  const start = Date.now();
-  for (;;) {
-    let v;
-    try {
-      v = await fn();
-    } catch (err) {
-      v = undefined;
-    }
-    if (v) return v;
-    if (Date.now() - start > timeoutMs) throw new Error(`timeout waiting for ${label}`);
-    await sleep(interval);
-  }
-}
-
-const results = [];
-function check(name, ok, detail = "") {
-  results.push({ name, ok });
-  console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? "  – " + detail : ""}`);
-}
-
-const game = await staticServer(gameDir);
-const serverCfg = deepMerge(DEFAULT_CONFIG, {
-  port: 0,
-  host: "127.0.0.1",
-  serveModFrom: root,
-  rounds: { countdownSeconds: 3, finishGraceSeconds: 3, resultsSeconds: 3, readyTimeoutSeconds: 60, disconnectGraceSeconds: 5, lateRecordGraceMs: 300 },
-  matchmaking: { tickMs: 1000 },
-  queues: { duel: { roundsToWin: 2, maxRounds: 3 } },
-  rating: { placementMatches: 1 },
-  requireVanillaPhysics: false,
-  tracks: [{ id: "5803f9e963625804e3de3246d043dc7dde847aa32e991f7f7326b0453f1fa038", name: "Summer 1", trackUrl: "tracks/official/summer1.track", tier: 1, roundSeconds: 12 }],
+const { gameDir, headed, keep } = parseArgs();
+const harness = await createHarness({
+  gameDir,
+  headed,
+  serverCfg: {
+    rounds: { countdownSeconds: 3, finishGraceSeconds: 3, resultsSeconds: 3, readyTimeoutSeconds: 60, disconnectGraceSeconds: 5, lateRecordGraceMs: 300 },
+    matchmaking: { tickMs: 1000 },
+    queues: { duel: { roundsToWin: 2, maxRounds: 3 } },
+    rating: { placementMatches: 1 },
+    requireVanillaPhysics: false,
+    cup: { enabled: false },
+    tracks: [{ id: "5803f9e963625804e3de3246d043dc7dde847aa32e991f7f7326b0453f1fa038", name: "Summer 1", trackUrl: "tracks/official/summer1.track", tier: 1, roundSeconds: 12 }],
+  },
 });
-const ranked = createServer(serverCfg, { log: { info: (...a) => console.log("[server]", ...a), warn: console.warn, error: console.error }, storePath: null });
-const rankedAddr = await ranked.listen();
-const wsUrl = `ws://127.0.0.1:${rankedAddr.port}`;
-const modUrl = `http://127.0.0.1:${rankedAddr.port}/mod`;
-const gameUrl = `http://127.0.0.1:${game.port}/index.html`;
-console.log(`game: ${gameUrl}\nmod:  ${modUrl}\nws:   ${wsUrl}`);
+const { artifacts, results, check, ranked, openPlayer, waitFor, sleep, players } = harness;
 
-const executablePath = process.env.CHROMIUM_PATH ?? ["/opt/pw-browsers/chromium-1194/chrome-linux/chrome"].find((p) => fs.existsSync(p));
-const browser = await chromium.launch({
-  headless: !headed,
-  executablePath,
-  args: ["--no-sandbox", "--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist", "--mute-audio", "--autoplay-policy=no-user-gesture-required", "--disable-dev-shm-usage"],
-});
-
-const polyTypesSource = fs.readFileSync(path.join(gameDir, "PolyTypes.js"), "utf8");
-
-async function openPlayer(name) {
-  const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
-  const logs = [];
-  await context.addInitScript(
-    ({ modUrl, wsUrl, name }) => {
-      localStorage.setItem("polyMods", JSON.stringify([{ base: modUrl, version: "latest", loaded: true }]));
-      localStorage.setItem("polyranked.settings", JSON.stringify({ serverUrl: wsUrl, autoConnect: true, nameOverride: name, showHud: true }));
-      if (!localStorage.getItem("polyranked.secret")) localStorage.setItem("polyranked.secret", Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) => b.toString(16).padStart(2, "0")).join(""));
-      window.alert = (m) => console.log("[alert]", m);
-    },
-    { modUrl, wsUrl, name },
-  );
-  await context.route("**/*", (route) => {
-    const url = route.request().url();
-    if (url.includes("cdn.polymodloader.com/cb/PolyTrackMods/PolyModLoader/0.6.3/PolyTypes.js")) {
-      return route.fulfill({ status: 200, contentType: "application/javascript", body: polyTypesSource });
-    }
-    if (/kodub\.com|polymodloader\.com/.test(url)) return route.abort();
-    return route.continue();
-  });
-  const page = await context.newPage();
-  page.on("console", (msg) => {
-    const text = msg.text();
-    logs.push(`[${msg.type()}] ${text}`);
-    if (text.includes("[PolyRanked]") || msg.type() === "error" || text.includes("[PML]")) console.log(`  (${name}) ${text.slice(0, 300)}`);
-  });
-  page.on("pageerror", (err) => {
-    logs.push(`[pageerror] ${err.message}`);
-    console.log(`  (${name}) PAGE ERROR: ${err.message.slice(0, 300)}`);
-  });
-  await page.goto(gameUrl);
-  return { name, page, context, logs };
-}
-
-const players = [];
 let exitCode = 1;
 try {
-  players.push(await openPlayer("Alice"), await openPlayer("Bob"));
+  await openPlayer("Alice");
+  await openPlayer("Bob");
 
   for (const p of players) {
     await waitFor(`${p.name}: mod booted`, () => p.page.evaluate(() => !!globalThis.polyRanked), 180000, 500);
@@ -297,22 +188,8 @@ try {
   exitCode = results.every((r) => r.ok) ? 0 : 1;
 } catch (err) {
   console.error("E2E failed:", err);
-  for (const p of players) {
-    try {
-      await p.page.screenshot({ path: path.join(artifacts, `${p.name}-failure.png`) });
-    } catch {
-      /* ignore */
-    }
-    fs.writeFileSync(path.join(artifacts, `${p.name}-console.log`), p.logs.join("\n"));
-  }
+  await harness.screenshotAll("failure");
   exitCode = 1;
 } finally {
-  for (const p of players) fs.writeFileSync(path.join(artifacts, `${p.name}-console.log`), p.logs.join("\n"));
-  console.log(`\n${results.filter((r) => r.ok).length}/${results.length} checks passed; artifacts in ${path.relative(root, artifacts)}/`);
-  if (!keep) {
-    await browser.close();
-    await ranked.close();
-    game.srv.close();
-  }
-  process.exit(exitCode);
+  process.exit(await harness.finish(exitCode, { keep }));
 }

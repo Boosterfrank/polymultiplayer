@@ -41,6 +41,24 @@ refused.
   period) forfeits. Ratings are per queue; players are *Unranked* until 5
   placement matches are done.
 
+### The always-on Quickplay Cup
+
+Open **Multiplayer** in the main menu and the page carries a big **Join the Cup**
+button with the live state of the cup (who is racing, which track, who leads).
+The cup is one permanent lobby on the ranked server:
+
+* it never closes; join and leave whenever you like, late joiners race from the
+  next round and leavers keep their points for a comeback;
+* rounds start by themselves once two racers are in, every three rounds a new
+  random track is drawn, places score 10/8/6/5/4/3/2/1 (Quickplay rules);
+* the first racer to reach 100 points with a unique lead wins; the standings
+  reset after a short break and the next cup starts automatically;
+* it does not affect ranked ratings; cup wins have their own leaderboard
+  (`/api/cup/leaderboard`).
+
+Everything is tunable in the server's `cup` section (`server/config.example.json`);
+`"enabled": false` hides the button.
+
 ## Hosting a server
 
 ```bash
@@ -63,7 +81,9 @@ merged over the defaults in `server/src/config.js`:
 * `rounds` – countdown, finish grace, results time, reconnect grace.
 * `rating` – initial rating, K factors, placement matches, division thresholds.
 * `trackPerRound` – pick a new track every round instead of one per match.
-* `gameVersion` / `requireVanillaPhysics` – gate who may queue.
+* `gameVersion` / `requireVanillaPhysics` – gate who may queue (and join the cup).
+* `cup` – the always-on Quickplay Cup (players needed, rounds per track, points,
+  target, break between cups), or `"enabled": false`.
 
 Players are stored in `data/polyranked.json` (atomic JSON writes). The HTTP side
 exposes `/health`, `/api/queues`, `/api/leaderboard?queue=duel`, `/api/stats`.
@@ -153,8 +173,9 @@ npm run build:site             # self-contained PolyModLoader copy with the mod 
 
 For local testing add `http://localhost:8788/mod` as the mod URL in PML (PML does
 not cache localhost mods). `node test/e2e/run.mjs --game-dir <PolyModLoader checkout>`
-runs a headless Chromium end-to-end match using the real game build (see the
-file header for details).
+runs a headless Chromium end-to-end match using the real game build, and
+`node test/e2e/cup.mjs` does the same for the always-on cup (see the file
+headers for details).
 
 Repository layout, the game-hooking approach and the ranked rules are described
 in [docs/DESIGN.md](docs/DESIGN.md); the message format in

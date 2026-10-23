@@ -23,6 +23,18 @@
     "kNormal": 20,
     "placementMatches": 5
   },
+  "cup": {
+    "enabled": true,
+    "name": "Quickplay Cup",
+    "minPlayers": 2,
+    "maxPlayers": 8,
+    "roundsPerTrack": 3,
+    "target": 100,
+    "pointsTable": [10, 8, 6, 5, 4, 3, 2, 1],
+    "waitSeconds": 8,
+    "breakSeconds": 20,
+    "idleResetSeconds": 300
+  },
   "kodubProxy": {
     "enabled": false,
     "path": "/kodub",

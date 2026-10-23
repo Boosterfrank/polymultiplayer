@@ -18,6 +18,8 @@ PolyTrack race-time frames, i.e. milliseconds.
 | `leave_match` | `matchId` | forfeit |
 | `ping` | `t` | answered with `pong {t, serverTime}` |
 | `leaderboard_get` | `queue` | |
+| `cup_join` | `vanilla` | a seat in the always-on cup; answered with `match_found` (`format.cup = true`) |
+| `cup_leave` | | (`leave_match` works too) |
 
 Binary `CAR_UPDATE` (type byte `1`):
 `u8 type | u32 sessionId | u32 resetCounter | u16 count | count × { u16 len, bytes }`.
@@ -45,6 +47,20 @@ Each `bytes` blob is a car state in the game's own multiplayer encoding
 | `server_message` | `text` (shown as an in-game toast) |
 | `pong` | `t`, `serverTime` |
 | `leaderboard` | `queue`, `entries[] {position, id, nickname, countryCode, rating, matches, wins, losses, division}` |
+| `cup_state` | `cup` – the lobby: `{name, phase, cupNumber, round, trackRounds, roundsPerTrack, target, pointsTable, minPlayers, maxPlayers, track, players[], standings[] {slot, id, nickname, points, place, connected}, startsAt, endsAt, nextAt, lastWinner}` (sent to members on every change) |
+| `cup_end` | `cupNumber`, `winner {slot, id, nickname, points}`, `standings[]`, `scores`, `rounds`, `nextCupIn`, `nextAt`, `nextTrack`, `players` |
+
+### The always-on cup
+
+The cup is a permanent lobby (`matchId = "cup"`) that reuses the match messages:
+`cup_join` answers with `match_found` (`format = {scoring: "points", cup: true,
+target, roundsPerTrack, pointsTable}`, plus the lobby in `cup`), the client loads
+the track and sends `match_ready`; rounds then arrive as `round_start` /
+`round_end` (with `cupOver` and, before a track change, `nextTrack` to preload)
+whenever enough loaded racers are present. Players who join during a round take
+part from the next one. A winner ends the cup with `cup_end`; after `nextCupIn`
+the standings reset and the next cup's `round_start` follows by itself. `welcome`
+carries the lobby as `cup` (or `null` when the server has none).
 
 Binary `CAR_UPDATE_RELAY` (type byte `2`):
 `u8 type | u8 slot | u32 sessionId | u32 resetCounter | u16 count | count × { u16 len, bytes }`.
@@ -60,4 +76,6 @@ The game only ever compares session ids for equality.
 ## HTTP
 
 `GET /health`, `GET /api/queues`, `GET /api/leaderboard?queue=duel&limit=50`,
-`GET /api/stats`, and `GET /mod/*` when the server is started with `--serve-mod <dir>`.
+`GET /api/stats`, `GET /api/cup` (the lobby, same shape as `cup_state.cup`, or
+`{enabled: false}`), `GET /api/cup/leaderboard` (cup wins per player and the last
+cups), and `GET /mod/*` when the server is started with `--serve-mod <dir>`.

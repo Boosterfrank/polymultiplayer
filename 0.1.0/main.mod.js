@@ -1,4 +1,4 @@
-// PolyRanked 0.1.0 – https://github.com/boosterfrank/polymultiplayer (built 2026-10-22)
+// PolyRanked 0.1.0 – https://github.com/boosterfrank/polymultiplayer (built 2026-10-23)
 
 // mod/src/main.js
 import { PolyMod } from "https://cdn.polymodloader.com/cb/PolyTrackMods/PolyModLoader/0.6.3/PolyTypes.js";
@@ -16,6 +16,8 @@ var MSG = Object.freeze({
   LEAVE_MATCH: "leave_match",
   PING: "ping",
   LEADERBOARD_GET: "leaderboard_get",
+  CUP_JOIN: "cup_join",
+  CUP_LEAVE: "cup_leave",
   // server -> client
   WELCOME: "welcome",
   ERROR: "error",
@@ -33,7 +35,9 @@ var MSG = Object.freeze({
   SERVER_MESSAGE: "server_message",
   PONG: "pong",
   LEADERBOARD: "leaderboard",
-  PROFILE: "profile"
+  PROFILE: "profile",
+  CUP_STATE: "cup_state",
+  CUP_END: "cup_end"
 });
 var BIN = Object.freeze({
   CAR_UPDATE: 1,
@@ -1118,6 +1122,8 @@ var MatchController = class extends Emitter {
     this.countdownOpen = false;
     this._countdownTimer = null;
     this.matchEnd = null;
+    this.cup = null;
+    this.prefetched = null;
     this._unsubs = [];
     this.listen();
   }
@@ -1140,6 +1146,8 @@ var MatchController = class extends Emitter {
     on(MSG.MATCH_END, (msg) => this.onMatchEnd(msg));
     on(MSG.PLAYER_LEFT, (msg) => this.onPlayerLeft(msg));
     on(MSG.PLAYER_STATUS, (msg) => this.onPlayerStatus(msg));
+    on(MSG.CUP_STATE, (msg) => this.onCupState(msg));
+    on(MSG.CUP_END, (msg) => this.onCupEnd(msg));
     on(MSG.PINGS, (msg) => this.connection?.setPings(msg.pings));
     on(MSG.CAR_RESET, (msg) => this.connection?.handleCarReset(msg.sessionId, msg.slot, msg.resetCounter));
     on(MSG.SERVER_MESSAGE, (msg) => this.connection?.serverMessage(msg.text));
@@ -1166,7 +1174,12 @@ var MatchController = class extends Emitter {
     this.phase = "loading";
     this.round = 0;
     this.gameStarted = false;
+    this.cup = msg.format?.cup ? msg.cup : null;
     this.hud.show(msg, msg.you);
+    if (this.cup) {
+      this.hud.setCup(this.cup);
+      this.showLobby();
+    }
     this.emit("started", msg);
     try {
       this.track = await resolveTrack(this.bridge, this.game, msg.track);
@@ -1177,6 +1190,7 @@ var MatchController = class extends Emitter {
       this.cleanup();
       return;
     }
+    if (this.match !== msg) return;
     this.connection = this.createConnection(msg);
     this.client.send({ type: MSG.MATCH_READY, matchId: msg.matchId });
   }
@@ -1186,7 +1200,12 @@ var MatchController = class extends Emitter {
     this.match = msg;
     this.matchEnd = null;
     this.phase = msg.phase === "finished" ? "finished" : "loading";
+    this.cup = msg.format?.cup ? msg.cup : null;
     this.hud.show(msg, msg.you);
+    if (this.cup) {
+      this.hud.setCup(this.cup);
+      if (!(msg.round > 0)) this.showLobby();
+    }
     try {
       this.track = await resolveTrack(this.bridge, this.game, msg.track);
     } catch (err) {
@@ -1194,6 +1213,7 @@ var MatchController = class extends Emitter {
       this.cleanup();
       return;
     }
+    if (this.match !== msg) return;
     this.connection = this.createConnection(msg);
     if (msg.phase === "finished") return;
     if (msg.round > 0) {
@@ -1231,17 +1251,24 @@ var MatchController = class extends Emitter {
     this.startsAt = msg.startsAt;
     this.endsAt = msg.endsAt;
     this.phase = "countdown";
+    if (this.cup) {
+      if (msg.cup) this.cup = msg.cup;
+      this.hud.hideOverlay();
+      this.hud.setCup(this.cup);
+    }
     if (msg.players) this.connection.setPlayers(msg.players);
     this.hud.setPlayers(msg.players ?? this.match.players);
     this.hud.setRound(msg.round, msg.startsAt, msg.endsAt, msg.scores);
     if (msg.track && this.track && msg.track.id !== this.match.track?.id) {
       try {
-        this.track = await resolveTrack(this.bridge, this.game, msg.track);
+        this.track = this.prefetched?.id === msg.track.id ? this.prefetched.track : await resolveTrack(this.bridge, this.game, msg.track);
+        this.prefetched = null;
         this.match.track = msg.track;
       } catch (err) {
         log.error("failed to load the round track", err);
       }
     }
+    if (this.sessionId !== msg.sessionId || !this.connection) return;
     this.connection.startSession(msg.sessionId, this.track);
     if (!this.gameStarted) this.startGame();
   }
@@ -1307,6 +1334,7 @@ var MatchController = class extends Emitter {
     if (!this.isSameMatch(msg)) return;
     this.phase = msg.matchOver ? "finished" : "results";
     this.stopCountdown();
+    if (msg.nextTrack) this.prefetchTrack(msg.nextTrack);
     const records = {};
     for (const r of msg.results ?? []) if (r.frames != null) records[r.slot] = r.frames;
     this.connection?.setRecords(records);
@@ -1324,6 +1352,54 @@ var MatchController = class extends Emitter {
     } else text = `Round ${msg.round}: draw`;
     if (this.match.format.scoring !== "duel") text += ` (+${myPoints})`;
     this.hud.showToast(text, msg.nextRoundIn ? msg.nextRoundIn : 6e3);
+  }
+  prefetchTrack(info) {
+    if (!info?.id || this.prefetched?.id === info.id) return;
+    resolveTrack(this.bridge, this.game, info).then((track) => {
+      this.prefetched = { id: info.id, track };
+    }).catch((err) => log.warn("could not preload the next track", err));
+  }
+  // ------------------------------------------------------------- cup
+  showLobby() {
+    if (!this.cup) return;
+    this.hud.showCupLobby(this.cup, { onLeave: () => this.leaveCup(), onHide: () => this.hud.hideOverlay() });
+  }
+  onCupState(msg) {
+    if (!this.isSameMatch(msg) || !this.cup || !msg.cup) return;
+    const before = this.cup.phase;
+    this.cup = msg.cup;
+    this.hud.setCup(msg.cup);
+    this.connection?.setPlayers(msg.cup.players);
+    if (this.gameStarted && msg.cup.phase === "idle" && before !== "idle") this.hud.showToast("Waiting for more racers\u2026", 6e3);
+    this.emit("cupState", msg.cup);
+  }
+  onCupEnd(msg) {
+    if (!this.isSameMatch(msg) || !this.cup) return;
+    this.phase = "cupBreak";
+    this.stopCountdown();
+    this.connection?.endSession(this.sessionId);
+    this.hud.setScores(msg.scores);
+    if (msg.players) {
+      this.match.players = msg.players;
+      this.connection?.setPlayers(msg.players);
+    }
+    this.cup = { ...this.cup, phase: "complete", nextAt: msg.nextAt, standings: msg.standings, lastWinner: msg.winner, players: msg.players ?? this.cup.players };
+    this.hud.setCup(this.cup);
+    if (msg.nextTrack) this.prefetchTrack(msg.nextTrack);
+    this.hud.showCupEnd(msg, { onLeave: () => this.leaveCup(), onHide: () => this.hud.hideOverlay() });
+    this.emit("cupEnd", msg);
+  }
+  /** Leave the cup: from the game (Exit path) or from the lobby. */
+  leaveCup() {
+    if (!this.cup) return;
+    const matchId = this.match?.matchId;
+    if (this.gameStarted) {
+      this.leaveToMenu(false);
+    } else {
+      this.client.send({ type: MSG.CUP_LEAVE, matchId });
+      this.cleanup();
+    }
+    this.emit("leftCup");
   }
   onMatchEnd(msg) {
     if (!this.isSameMatch(msg)) return;
@@ -1358,9 +1434,9 @@ var MatchController = class extends Emitter {
   onConnectionDisposed(connection) {
     if (connection !== this.connection) return;
     if (this.active) {
-      log.info("left the match");
+      log.info(this.cup ? "left the cup" : "left the match");
       this.client.send({ type: MSG.LEAVE_MATCH, matchId: this.match.matchId });
-      this.emit("left");
+      this.emit("left", { cup: !!this.cup });
     }
     this.cleanup();
   }
@@ -1387,6 +1463,8 @@ var MatchController = class extends Emitter {
     if (connection && !connection.disposed) connection.dispose();
     this.match = null;
     this.track = null;
+    this.cup = null;
+    this.prefetched = null;
     this.phase = "idle";
     this.round = 0;
     this.sessionId = null;
@@ -1462,6 +1540,20 @@ var CSS = `
 .polyranked-overlay .pr-delta.up { color: #9cf59c; }
 .polyranked-overlay .pr-delta.down { color: #ff9696; }
 .polyranked-overlay .pr-buttons { display: flex; gap: 10px; justify-content: flex-end; padding: 10px; background: var(--surface-color, #28346a); }
+.polyranked-overlay .pr-lobby-status { font-size: 26px; text-align: center; padding: 10px 14px; }
+.polyranked-overlay .pr-lobby-countdown { font-size: 34px; text-align: center; padding: 0 0 10px 0; color: #ffe08a; }
+.polyranked-overlay .pr-winner { font-size: 40px; text-align: center; padding: 10px; color: #ffe08a; }
+.polyranked-overlay td.pr-place { width: 40px; opacity: 0.8; }
+.polyranked-overlay td.pr-right { text-align: right; }
+
+.polyranked-cup { position: absolute; left: 0; bottom: calc(100% + 16px); width: 700px; box-sizing: border-box; background: var(--surface-secondary-color, #212b58); font-family: ForcedSquare, Arial, sans-serif; color: var(--text-color, #fff); }
+.polyranked-cup .pr-cup-body { padding: 12px 16px 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+.polyranked-cup .pr-cup-title { display: flex; align-items: center; gap: 10px; font-size: 30px; }
+.polyranked-cup .pr-cup-title img { width: 34px; height: 34px; }
+.polyranked-cup .pr-cup-status { font-size: 19px; opacity: 0.85; min-height: 1.3em; }
+.polyranked-cup .pr-cup-status.err { color: #ff9696; opacity: 1; }
+.polyranked-cup .pr-cup-join { width: 100%; box-sizing: border-box; margin: 0; padding: 14px 20px; font-size: 38px; text-align: center; justify-content: center; }
+.polyranked-cup .pr-cup-join .button-icon { margin-right: 10px; }
 `;
 function injectStyles() {
   if (document.getElementById(STYLE_ID)) return;
@@ -1502,6 +1594,159 @@ function installMainMenuButton(onClick) {
   observer.observe(ui, { childList: true, subtree: true });
   tryInject();
   return () => observer.disconnect();
+}
+
+// mod/src/ui/cupbutton.js
+var BOX_CLASS = "polyranked-cup";
+function installCupButton({ onJoin, onLeave, fetchState, localState, serverNow, intervalMs = 5e3 }) {
+  const ui = document.getElementById("ui");
+  if (!ui) return { dispose() {
+  }, refresh() {
+  } };
+  let box = null;
+  let state = null;
+  let stateAt = 0;
+  let unreachable = false;
+  let pollTimer = null;
+  let tickTimer = null;
+  let busy = false;
+  let titleText = null;
+  let statusEl = null;
+  let button = null;
+  let buttonIcon = null;
+  let buttonText = null;
+  const build = (body) => {
+    titleText = el("span", { text: state?.name ?? "Quickplay Cup" });
+    body.appendChild(el("div", { className: "pr-cup-title" }, [el("img", { attrs: { src: TROPHY_SVG, alt: "" } }), titleText]));
+    statusEl = el("div", { className: "pr-cup-status" });
+    body.appendChild(statusEl);
+    buttonIcon = el("img", { className: "button-icon", attrs: { src: "images/play.svg" } });
+    buttonText = document.createTextNode("Join the Cup");
+    button = el("button", {
+      className: "button pr-cup-join",
+      on: {
+        click: (ev) => {
+          ev.preventDefault();
+          if (busy) return;
+          busy = true;
+          setTimeout(() => busy = false, 1500);
+          localState().inCup ? onLeave() : onJoin();
+          render();
+        }
+      }
+    });
+    button.appendChild(buttonIcon);
+    button.appendChild(buttonText);
+    body.appendChild(button);
+  };
+  const render = () => {
+    if (!box || !box.isConnected || !button) return;
+    const local = localState();
+    titleText.textContent = state?.name ?? "Quickplay Cup";
+    statusEl.textContent = statusText(local);
+    statusEl.classList.toggle("err", !!local.notice);
+    buttonIcon.src = local.inCup ? "images/back.svg" : "images/play.svg";
+    buttonText.data = local.inCup ? "Leave the cup" : "Join the Cup";
+    button.disabled = !!state && state.enabled === false;
+  };
+  const statusText = (local) => {
+    if (local.notice) return local.notice;
+    if (local.inCup) {
+      if (local.phase === "racing" || local.phase === "countdown") return "You are in the cup \u2013 the round is running";
+      return "You are in the cup \u2013 waiting for the next round";
+    }
+    if (unreachable && !state) return "Cup server unreachable \u2013 check the server address in the Ranked menu";
+    if (!state) return "Checking the cup\u2026";
+    if (state.enabled === false) return "This server has no cup";
+    const n = state.players.length;
+    const now = serverNow();
+    const leader = state.standings?.[0];
+    const lead = leader && leader.points > 0 ? ` \xB7 ${leader.nickname} leads with ${leader.points} pts` : "";
+    const track = state.track?.name ? ` on ${state.track.name}` : "";
+    switch (state.phase) {
+      case "idle":
+        return n === 0 ? `Always on \xB7 nobody racing right now \u2013 be the first (first to ${state.target} pts)` : `${n} waiting for racers${track} \xB7 ${state.minPlayers} needed to start`;
+      case "starting":
+        return `${n} racing${track} \xB7 round ${state.round + 1} starts in ${formatSeconds((state.nextAt - now) / 1e3)}`;
+      case "countdown":
+      case "racing":
+      case "closing":
+        return `${n} racing${track} \xB7 round ${state.round} (${state.trackRounds}/${state.roundsPerTrack})${lead} \xB7 join for the next round`;
+      case "results":
+        return `${n} racing${track} \xB7 round ${state.round} just ended${lead} \xB7 next round in ${formatSeconds((state.nextAt - now) / 1e3)}`;
+      case "complete":
+        return `Cup #${state.cupNumber} won by ${state.lastWinner?.nickname ?? "?"} \xB7 next cup starts in ${formatSeconds((state.nextAt - now) / 1e3)}`;
+      default:
+        return `${n} in the cup`;
+    }
+  };
+  const poll = async () => {
+    try {
+      const next = await fetchState();
+      if (next) {
+        state = next;
+        stateAt = Date.now();
+        unreachable = false;
+      } else unreachable = true;
+    } catch {
+      unreachable = true;
+    }
+    render();
+  };
+  const tryInject = () => {
+    const join = ui.querySelector(".multiplayer-ui > .join");
+    if (!join) {
+      if (box) {
+        box = null;
+        stopPolling();
+      }
+      return;
+    }
+    if (join.querySelector("." + BOX_CLASS)) return;
+    const body = el("div", { className: "pr-cup-body" });
+    box = el("div", { className: BOX_CLASS }, [body]);
+    build(body);
+    join.insertBefore(box, join.firstChild);
+    render();
+    startPolling();
+  };
+  const startPolling = () => {
+    stopPolling();
+    poll();
+    pollTimer = setInterval(poll, intervalMs);
+    tickTimer = setInterval(render, 1e3);
+  };
+  const stopPolling = () => {
+    if (pollTimer) clearInterval(pollTimer);
+    if (tickTimer) clearInterval(tickTimer);
+    pollTimer = tickTimer = null;
+  };
+  const observer = new MutationObserver(() => tryInject());
+  observer.observe(ui, { childList: true, subtree: true });
+  tryInject();
+  return {
+    dispose() {
+      observer.disconnect();
+      stopPolling();
+      box?.remove();
+      box = null;
+    },
+    refresh() {
+      render();
+    },
+    /** Push a fresh state (welcome.cup, cup_state) without waiting for the next poll. */
+    setState(next) {
+      if (!next) return;
+      state = next;
+      stateAt = Date.now();
+      unreachable = false;
+      render();
+    },
+    /** @returns {number} age of the cached state in ms */
+    get stateAge() {
+      return Date.now() - stateAt;
+    }
+  };
 }
 
 // mod/src/ui/menu.js
@@ -1782,6 +2027,9 @@ var MatchHud = class {
     this._toastTimer = null;
     this._timer = null;
     this.enabled = true;
+    this.cup = null;
+    this.lobbyEl = null;
+    this.lobbyCountdownEl = null;
   }
   dispose() {
     this.stopTimer();
@@ -1805,9 +2053,9 @@ var MatchHud = class {
   }
   hide() {
     this.match = null;
+    this.cup = null;
     this.root.classList.add("hidden");
-    this.overlay.classList.add("hidden");
-    clearChildren(this.overlay);
+    this.hideOverlay();
     this.stopTimer();
   }
   startTimer() {
@@ -1870,14 +2118,30 @@ var MatchHud = class {
     return `${pts[this.you] ?? 0} pts`;
   }
   // ------------------------------------------------------------- rendering
+  roundLabel() {
+    const f = this.match.format;
+    if (f.cup) {
+      if (!this.round) return this.cup?.phase === "idle" ? "Waiting for racers" : "Waiting for the next round";
+      const block = this.cup?.roundsPerTrack ? ` (${this.cup.trackRounds}/${this.cup.roundsPerTrack})` : "";
+      return `Round ${this.round}${block} \xB7 first to ${f.target}`;
+    }
+    if (!this.round) return "Loading\u2026";
+    return `Round ${this.round} \xB7 ${f.roundsToWin ? `first to ${f.roundsToWin}` : `of ${f.maxRounds}`}`;
+  }
+  /** Cup lobby details (from cup_state / round_start) shown in the card and the lobby overlay. */
+  setCup(cup) {
+    this.cup = cup;
+    if (cup?.players) this.setPlayers(cup.players);
+    else this.render();
+    if (this.lobbyEl) this.renderLobby();
+  }
   render() {
     if (!this.match) return;
     clearChildren(this.root);
     const f = this.match.format;
-    const roundsInfo = f.roundsToWin ? `first to ${f.roundsToWin}` : `of ${f.maxRounds}`;
     this.root.appendChild(
       el("div", { className: "pr-card" }, [
-        el("div", { className: "pr-title" }, [el("span", { text: this.match.queueName }), el("span", { text: this.round ? `Round ${this.round} \xB7 ${roundsInfo}` : "Loading\u2026" })]),
+        el("div", { className: "pr-title" }, [el("span", { text: this.match.queueName }), el("span", { text: this.roundLabel() })]),
         el("div", { className: "pr-score" }, [el("span", { text: this.scoreHeadline() }), this.timerEl = el("span", { className: "pr-timer" })])
       ])
     );
@@ -1905,10 +2169,12 @@ var MatchHud = class {
     this.renderTimer();
   }
   renderTimer() {
+    if (this.lobbyCountdownEl) this.lobbyCountdownEl.textContent = this.lobbyCountdownText();
     if (!this.timerEl || !this.match) return;
     const now = this.serverNow();
     if (!this.round) {
-      this.timerEl.textContent = "";
+      const nextAt = this.cup?.nextAt;
+      this.timerEl.textContent = nextAt && nextAt > now ? `in ${Math.ceil((nextAt - now) / 1e3)}` : "";
       return;
     }
     if (now < this.startsAt) {
@@ -1956,6 +2222,74 @@ var MatchHud = class {
   }
   button(text, onClick) {
     return el("button", { className: "button", text, on: { click: onClick } });
+  }
+  hideOverlay() {
+    this.overlay.classList.add("hidden");
+    clearChildren(this.overlay);
+    this.lobbyEl = null;
+    this.lobbyCountdownEl = null;
+  }
+  // ------------------------------------------------------------- cup
+  standingsTable(standings, { showPlace = true } = {}) {
+    const table = el("table");
+    for (const s of standings) {
+      table.appendChild(
+        el("tr", { className: s.slot === this.you ? "self" : "" }, [
+          showPlace ? el("td", { className: "pr-place", text: s.place != null ? `${s.place}.` : "" }) : null,
+          el("td", { text: s.nickname + (s.connected === false ? " (reconnecting)" : "") }),
+          el("td", { className: "pr-right", text: `${s.points} pts` })
+        ])
+      );
+    }
+    return table;
+  }
+  lobbyCountdownText() {
+    const cup = this.cup;
+    if (!cup) return "";
+    const now = this.serverNow();
+    if (cup.phase === "idle") return cup.players.length < cup.minPlayers ? `${cup.players.length}/${cup.minPlayers} racers \u2013 waiting for more` : "Waiting for racers to load";
+    const at = cup.phase === "starting" || cup.phase === "results" || cup.phase === "complete" ? cup.nextAt : cup.startsAt;
+    if (!at) return "";
+    const secs = Math.max(0, Math.ceil((at - now) / 1e3));
+    if (cup.phase === "complete") return `Next cup starts in ${secs} s`;
+    if (cup.phase === "countdown" || cup.phase === "racing" || cup.phase === "closing") return `Round ${cup.round} is running \u2013 you join the next one`;
+    return `${cup.round ? "Next round" : "Round 1"} starts in ${secs} s`;
+  }
+  /** Lobby overlay while waiting for the next round (in the menu). */
+  showCupLobby(cup, { onLeave, onHide }) {
+    this.cup = cup;
+    clearChildren(this.overlay);
+    const box = el("div", { className: "pr-box pr-lobby" }, [el("h2", { text: cup.name })]);
+    this.lobbyEl = el("div");
+    box.appendChild(this.lobbyEl);
+    box.appendChild(el("div", { className: "pr-buttons" }, [this.button("Hide", onHide), this.button("Leave the cup", onLeave)]));
+    this.overlay.appendChild(box);
+    this.overlay.classList.remove("hidden");
+    this.renderLobby();
+  }
+  renderLobby() {
+    if (!this.lobbyEl || !this.cup) return;
+    const cup = this.cup;
+    clearChildren(this.lobbyEl);
+    this.lobbyEl.appendChild(el("div", { className: "pr-lobby-status", text: `You are in \xB7 ${cup.players.length} racer${cup.players.length === 1 ? "" : "s"} \xB7 first to ${cup.target} points \xB7 new track every ${cup.roundsPerTrack} rounds${cup.track?.name ? ` \xB7 now: ${cup.track.name}` : ""}` }));
+    this.lobbyCountdownEl = el("div", { className: "pr-lobby-countdown", text: this.lobbyCountdownText() });
+    this.lobbyEl.appendChild(this.lobbyCountdownEl);
+    if (cup.standings?.length) this.lobbyEl.appendChild(el("div", { className: "pr-section" }, [this.standingsTable(cup.standings)]));
+  }
+  /** Cup over: winner and final standings, the next cup starts by itself. */
+  showCupEnd(msg, { onLeave, onHide }) {
+    clearChildren(this.overlay);
+    const won = msg.winner?.slot === this.you;
+    const box = el("div", { className: "pr-box" }, [
+      el("h2", { text: `Cup #${msg.cupNumber} over` }),
+      el("div", { className: "pr-result " + (won ? "win" : "loss"), text: won ? "YOU WIN THE CUP!" : `${msg.winner?.nickname ?? "?"} wins the cup` }),
+      el("div", { className: "pr-section" }, [this.standingsTable(msg.standings ?? [])])
+    ]);
+    this.lobbyCountdownEl = el("div", { className: "pr-lobby-countdown", text: this.lobbyCountdownText() });
+    box.appendChild(this.lobbyCountdownEl);
+    box.appendChild(el("div", { className: "pr-buttons" }, [this.button("Stay for the next cup", onHide), this.button("Leave the cup", onLeave)]));
+    this.overlay.appendChild(box);
+    this.overlay.classList.remove("hidden");
   }
 };
 
@@ -2015,6 +2349,9 @@ var PolyRankedApp = class {
     this.controller = null;
     this.removeMenuButton = null;
     this.pendingQueue = null;
+    this.pendingCupJoin = false;
+    this.cupNotice = null;
+    this.cupButton = null;
   }
   start() {
     injectStyles();
@@ -2023,6 +2360,13 @@ var PolyRankedApp = class {
     this.hud.setEnabled(this.settings.showHud !== false);
     this.controller = new MatchController({ client: this.client, bridge: this.bridge, game: this.game, hud: this.hud });
     this.removeMenuButton = installMainMenuButton(() => this.toggleMenu());
+    this.cupButton = installCupButton({
+      onJoin: () => this.joinCup(),
+      onLeave: () => this.controller.leaveCup(),
+      fetchState: () => this.fetchCupState(),
+      localState: () => ({ inCup: !!this.controller.cup && this.controller.active, phase: this.controller.cup?.phase ?? null, notice: this.cupNotice }),
+      serverNow: () => this.client.serverNow()
+    });
     this.onKeyDown = (ev) => {
       if (ev.code === "F7" && !ev.repeat) {
         ev.preventDefault();
@@ -2127,10 +2471,61 @@ var PolyRankedApp = class {
     }
   }
   toggleMenu() {
-    if (this.controller.active && !this.menu.isOpen) {
+    if (this.controller.active && !this.menu.isOpen && (this.controller.gameStarted || !this.controller.cup)) {
       return;
     }
     this.menu.toggle();
+  }
+  // ------------------------------------------------------------- cup
+  httpBase() {
+    return String(this.settings.serverUrl ?? "").trim().replace(/^wss:/i, "https:").replace(/^ws:/i, "http:").replace(/\/+$/, "");
+  }
+  async fetchCupState() {
+    const base = this.httpBase();
+    if (!/^https?:/.test(base)) return null;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4e3);
+    try {
+      const res = await fetch(`${base}/api/cup`, { cache: "no-store", signal: controller.signal });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  /** "Join the Cup" on the multiplayer page: connect if needed, then ask the server for a seat. */
+  joinCup() {
+    this.cupNotice = null;
+    if (this.controller.active) {
+      if (!this.controller.cup) this.cupNotice = "Finish your ranked match first";
+      this.cupButton?.refresh();
+      return;
+    }
+    const determinism = physicsDeterminism(this.bridge, this.game);
+    if (determinism === "pending") {
+      this.cupNotice = "The game is still running its physics self-test \u2013 try again in a few seconds";
+      this.cupButton?.refresh();
+      return;
+    }
+    if (!this.isVanilla()) {
+      const culprits = this.physicsMods();
+      this.cupNotice = culprits.length ? `The cup needs vanilla physics. Mods changing it: ${culprits.join(", ")}` : "The cup needs vanilla physics (the game's physics self-test failed)";
+      this.cupButton?.refresh();
+      return;
+    }
+    if (this.client.ready) this.sendCupJoin();
+    else {
+      this.pendingCupJoin = true;
+      this.cupNotice = "Connecting to the server\u2026";
+      this.client.connect();
+    }
+    this.cupButton?.refresh();
+  }
+  sendCupJoin() {
+    this.pendingCupJoin = false;
+    this.client.send({ type: MSG.CUP_JOIN, vanilla: true });
   }
   wire() {
     const { client, menu, controller } = this;
@@ -2142,7 +2537,16 @@ var PolyRankedApp = class {
           client.send({ type: MSG.QUEUE_JOIN, queue: this.pendingQueue });
           this.pendingQueue = null;
         }
+        if (this.pendingCupJoin) {
+          this.cupNotice = null;
+          this.sendCupJoin();
+        }
+        if (client.welcome?.cup) this.cupButton?.setState(client.welcome.cup);
+      } else if (state === "disconnected" && this.pendingCupJoin && detail) {
+        this.pendingCupJoin = false;
+        this.cupNotice = `Could not reach the server \u2013 ${detail}`;
       }
+      this.cupButton?.refresh();
     });
     client.on(MSG.QUEUE_STATUS, (msg) => menu.setQueueStatus(msg));
     client.on(MSG.LEADERBOARD, (msg) => menu.setLeaderboard(msg));
@@ -2150,12 +2554,19 @@ var PolyRankedApp = class {
     client.on("error", (msg) => {
       menu.setNotice(msg.message, "error");
       if (msg.code === "cannot_queue" || msg.code === "in_match") menu.setQueueStatus(null);
+      if (["cup_full", "cup_disabled", "cannot_queue", "in_match"].includes(msg.code) && !controller.active) {
+        this.cupNotice = msg.message;
+        this.cupButton?.refresh();
+      }
     });
     client.on(MSG.MATCH_FOUND, (msg) => {
       menu.setQueueStatus(null);
-      menu.setNotice(`Match found on ${msg.track?.name ?? "a track"} \u2013 loading\u2026`);
+      this.cupNotice = null;
+      menu.setNotice(msg.format?.cup ? `Joined the ${msg.queueName ?? "cup"} \u2013 loading ${msg.track?.name ?? "the track"}\u2026` : `Match found on ${msg.track?.name ?? "a track"} \u2013 loading\u2026`);
       menu.close();
+      this.cupButton?.refresh();
     });
+    client.on(MSG.CUP_STATE, (msg) => this.cupButton?.setState(msg.cup));
     client.on(MSG.MATCH_END, (msg) => {
       const r = msg.ratings?.[controller.match?.you];
       if (r) {
@@ -2175,6 +2586,10 @@ var PolyRankedApp = class {
     menu.on("disconnect", () => client.disconnect());
     menu.on("queue", (queueId) => {
       menu.setNotice(null);
+      if (controller.cup) {
+        menu.setNotice("Leave the cup before queueing for ranked.", "error");
+        return;
+      }
       const determinism = physicsDeterminism(this.bridge, this.game);
       if (determinism === "pending") {
         menu.setNotice("The game is still running its physics self-test \u2013 try again in a few seconds.", "error");
@@ -2206,7 +2621,15 @@ var PolyRankedApp = class {
       menu.setNotice(text, "error");
       menu.open();
     });
-    controller.on("left", () => menu.setNotice("You left the match (counts as a loss)."));
+    controller.on("left", (info) => {
+      menu.setNotice(info?.cup ? "You left the cup." : "You left the match (counts as a loss).");
+      this.cupButton?.refresh();
+    });
+    controller.on("leftCup", () => {
+      menu.setNotice("You left the cup.");
+      this.cupButton?.refresh();
+    });
+    controller.on("cupState", () => this.cupButton?.refresh());
     controller.on("queueAgain", () => {
       const queueId = controller.matchEnd?.queueId ?? client.welcome?.queues?.[0]?.id;
       menu.open();

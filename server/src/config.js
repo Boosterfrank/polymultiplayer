@@ -92,6 +92,27 @@ export const DEFAULT_CONFIG = {
   /** Same track for the whole match (Trackmania ranked) or a new one every round. */
   trackPerRound: false,
   /**
+   * The always-on Quickplay Cup: one permanent lobby players join and leave whenever they like.
+   * Every `roundsPerTrack` rounds a new random track is drawn; places score `pointsTable`; the first
+   * player at or above `target` (with a unique lead) wins, the standings reset after `breakSeconds`
+   * and the next cup starts by itself. Nothing here touches ranked ratings.
+   */
+  cup: {
+    enabled: true,
+    name: "Quickplay Cup",
+    minPlayers: 2,
+    maxPlayers: 8,
+    roundsPerTrack: 3,
+    target: 100,
+    pointsTable: [10, 8, 6, 5, 4, 3, 2, 1],
+    /** Once enough players are in, the first round starts after this long (lets others load). */
+    waitSeconds: 8,
+    /** Pause between a cup's end and the next one. */
+    breakSeconds: 20,
+    /** An idle lobby forgets its standings after this long without players. */
+    idleResetSeconds: 300,
+  },
+  /**
    * Opt-in proxy for PolyTrack's official backend so a self-hosted game copy keeps leaderboards and
    * the game's own invite-code multiplayer (see server/src/kodubproxy.js). Build the copy with
    * POLYRANKED_KODUB_PROXY=https://<this server>/kodub to use it.

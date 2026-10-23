@@ -292,7 +292,9 @@ export class CupController extends Emitter {
 
   onRoundEnd(msg) {
     if (!this.isSameMatch(msg)) return;
-    this.connection?.endSession(msg.sessionId);
+    // The session goes on through the break (the next round restarts the game); the game's own
+    // Session Results only appear when the cup is decided or the lobby runs out of racers.
+    if (msg.cupOver) this.connection?.endSession(msg.sessionId);
     if (msg.cup) this.applyState(msg.cup, { silent: true });
     const mine = msg.results?.find((r) => r.slot === this.you);
     if (mine && this.runtime?.racer) {
@@ -331,6 +333,8 @@ export class CupController extends Emitter {
     this.state = state;
     if (state.players && this.connection) this.connection.setPlayers(state.players);
     if (this.match && state.players) this.match.players = state.players;
+    // Fewer than minPlayers left: close the session so the game shows its Session Results.
+    if (before && state.phase === "idle" && before.phase !== "idle" && this.gameStarted && this.sessionId != null) this.connection?.endSession(this.sessionId);
     if (!silent && before) {
       if (state.phase === "idle" && before.phase !== "idle" && this.gameStarted) this.hud.notice("Waiting for more racers…", 5000);
       if (state.phase === "warmup" && before.phase !== "warmup" && this.runtime?.racer) this.hud.notice(this.rules.readyEndsWarmup ? "Warmup – press Ready when you are done practising" : "Warmup", 5000);

@@ -519,7 +519,7 @@ if (isMain) {
   const cfg = loadConfig();
   const server = createServer(cfg);
   server.listen().then((addr) => {
-    console.log(`[polyranked] listening on ws://${addr.address}:${addr.port}  (queues: ${Object.keys(cfg.queues).join(", ")}, tracks: ${cfg.tracks.length}, cup: ${cfg.cup?.enabled ? `${cfg.cup.name}, ${cup.pool.length} tracks` : "off"})`);
+    console.log(`[polyranked] listening on ws://${addr.address}:${addr.port}  (queues: ${Object.keys(cfg.queues).join(", ")}, tracks: ${cfg.tracks.length}, cup: ${server.cup ? `${cfg.cup.name}, ${server.cup.pool.length} tracks` : "off"})`);
     if (cfg.serveModFrom) console.log(`[polyranked] serving mod files from ${path.resolve(cfg.serveModFrom)} at http://localhost:${addr.port}/mod/`);
     if (cfg.kodubProxy?.enabled) console.log(`[polyranked] proxying PolyTrack's backend at http://localhost:${addr.port}${cfg.kodubProxy.path} (origin ${cfg.kodubProxy.origin})`);
   });

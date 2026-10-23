@@ -145,12 +145,35 @@ try {
 
   // Alice reports a checkpoint, then finishes; Bob sees the finish window and Alice watches Bob
   await sleep(2500);
-  await alice.page.evaluate(() => globalThis.polyRanked.cup.reportCheckpoint(0, 2000));
+  // the split widget (fed by the car's checkpoint callback) and the cup's checkpoint report
+  await alice.page.evaluate(() => {
+    globalThis.polyRanked.splits.onCheckpoint({ game: globalThis.polyRanked.cup.activeGame, index: 0, frames: 2000, speed: 123.4 });
+    globalThis.polyRanked.cup.reportCheckpoint(0, 2000);
+  });
   const cpB = await waitFor("Bob: Alice's checkpoint in the ranking", async () => {
     const live = await bob.page.evaluate(() => globalThis.polyRanked.cup.state.live);
     return live?.splits?.[1] || live?.splits?.[2] ? live : null;
   }, 5000, 100);
   check("the checkpoint reached the live state", Object.values(cpB.splits)[0].index === 0, JSON.stringify(cpB.splits));
+  const splitA = await waitFor("Alice: split widget answered", () => alice.page.evaluate(() => {
+    const w = document.querySelector(".prs-split:not(.hidden)");
+    if (!w || w.querySelector(".prs-rank")?.textContent === "…") return null;
+    return { rank: w.querySelector(".prs-rank").textContent, time: w.querySelector(".prs-time").textContent, speed: w.querySelector(".prs-speed").textContent, delta: w.querySelector(".prs-delta").classList.contains("hidden") ? null : w.querySelector(".prs-delta").textContent };
+  }), 4000, 50);
+  // the widget shows the round time (car clock plus the time GO was late in this tab), so only the second is fixed
+  check("Alice: Trackmania-style split – first at the checkpoint, speed and time, no gap yet", splitA.rank === "1st" && /^00:02\.\d{3}$/.test(splitA.time) && splitA.speed === "123" && splitA.delta === null, JSON.stringify(splitA));
+  await bob.page.evaluate(() => {
+    globalThis.polyRanked.splits.onCheckpoint({ game: globalThis.polyRanked.cup.activeGame, index: 0, frames: 2400, speed: 98 });
+    globalThis.polyRanked.cup.reportCheckpoint(0, 2400);
+  });
+  const splitB = await waitFor("Bob: split widget answered", () => bob.page.evaluate(() => {
+    const w = document.querySelector(".prs-split:not(.hidden)");
+    if (!w || w.querySelector(".prs-rank")?.textContent !== "2nd") return null;
+    const d = w.querySelector(".prs-delta");
+    return { rank: w.querySelector(".prs-rank").textContent, delta: d.textContent, slower: d.classList.contains("slower") };
+  }), 4000, 50);
+  check("Bob: second at the checkpoint with the gap to Alice in red", splitB.rank === "2nd" && splitB.delta === "+00:00.400" && splitB.slower === true, JSON.stringify(splitB));
+  await bob.page.screenshot({ path: path.join(artifacts, "Bob-cup-split.png") });
   await alice.page.evaluate(() => globalThis.polyRanked.cup.reportFinish(3000));
   const timerB = await waitFor("Bob: finish-window timer", () => bob.page.evaluate(() => document.querySelector(".prc-round-timer.visible")?.textContent || null), 5000, 50);
   check("Bob: the finish window counts down after Alice's finish", /^[1-8]s$/.test(timerB), timerB);

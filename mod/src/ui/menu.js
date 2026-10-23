@@ -266,12 +266,15 @@ export class RankedMenu extends Emitter {
     auto.checked = this.settings.autoConnect !== false;
     const hud = el("input", { attrs: { type: "checkbox" } });
     hud.checked = this.settings.showHud !== false;
+    const splits = el("input", { attrs: { type: "checkbox" } });
+    splits.checked = this.settings.splits !== false;
     section.appendChild(el("label", { text: "Ranked server (ws:// or wss://)" }));
     section.appendChild(urlInput);
     section.appendChild(el("label", { text: "Nickname override", style: { marginTop: "12px" } }));
     section.appendChild(nameInput);
     section.appendChild(el("label", { style: { marginTop: "12px" } }, [auto, " Connect automatically when the game starts"]));
     section.appendChild(el("label", {}, [hud, " Show the match HUD"]));
+    section.appendChild(el("label", {}, [splits, " Checkpoint splits (Trackmania style, in every run)"]));
     section.appendChild(el("div", { className: "pr-small", text: "Your identity is a random key stored in this browser; clearing site data resets your rating.", style: { marginTop: "12px" } }));
     this.box.appendChild(section);
     this.box.appendChild(
@@ -281,7 +284,7 @@ export class RankedMenu extends Emitter {
           this.render();
         }),
         this.button("Save", () => {
-          const patch = { serverUrl: normalizeServerUrl(urlInput.value), nameOverride: nameInput.value.trim().slice(0, 24), autoConnect: auto.checked, showHud: hud.checked };
+          const patch = { serverUrl: normalizeServerUrl(urlInput.value), nameOverride: nameInput.value.trim().slice(0, 24), autoConnect: auto.checked, showHud: hud.checked, splits: splits.checked };
           this.view = "main";
           this.emit("settings", patch);
         }),

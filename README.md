@@ -72,6 +72,13 @@ The cup is one permanent lobby on the ranked server that plays like a
   (`/api/cup/leaderboard`) and the track records are listed at
   `/api/cup/records`.
 
+Every checkpoint shows a small **Trackmania-style split** at the top of the
+screen (in every run, not only the cup): speed, your rank at that checkpoint and
+the time, and the gap below it in green or red. In a cup round the comparison is
+live against the other racers (rank among those who passed the checkpoint, gap
+to the fastest there); otherwise it is your fastest ghost. *Ranked → Settings*
+switches it off.
+
 The rules are a PolyCup preset: drop your `.polycup-preset.json` into the
 server's `cup.presetFile` (or edit `cup.rules`, see `server/config.example.json`);
 `"enabled": false` hides the button.
@@ -188,7 +195,7 @@ to Kodub.
 
 ```bash
 npm install                    # esbuild for the mod bundle
-npm run build                  # mod/src → 0.3.1/main.mod.js (+ POLYRANKED_DEFAULT_SERVER=wss://… to bake a default)
+npm run build                  # mod/src → 0.3.2/main.mod.js (+ POLYRANKED_DEFAULT_SERVER=wss://… to bake a default)
 npm test                       # mod unit tests + server tests (rules, rating, matchmaking, match engine, sockets)
 npm run dev                    # build, then run the server and serve the mod at http://localhost:8788/mod/
 npm run build:site             # self-contained PolyModLoader copy with the mod pre-installed -> dist/site/

@@ -8,6 +8,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   nameOverride: "",
   autoConnect: true,
   showHud: true,
+  /** Trackmania-style checkpoint splits in every run. */
+  splits: true,
 });
 
 function storage() {

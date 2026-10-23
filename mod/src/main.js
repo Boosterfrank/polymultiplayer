@@ -13,6 +13,7 @@ import { RankedMenu } from "./ui/menu.js";
 import { MatchHud } from "./ui/hud.js";
 import { CupController } from "./cup/controller.js";
 import { CupHud } from "./cup/hud.js";
+import { SplitsController } from "./splits.js";
 import { log } from "./util.js";
 
 class PolyRankedMod extends PolyMod {
@@ -78,6 +79,7 @@ class PolyRankedApp {
     this.native = null;
     this.cupHud = null;
     this.cup = null;
+    this.splits = null;
     this.removeMenuButton = null;
     this.pendingQueue = null;
     this.pendingCupJoin = false;
@@ -96,6 +98,19 @@ class PolyRankedApp {
     this.cupHud = new CupHud({ serverNow: () => this.client.serverNow() });
     this.cupHud.setEnabled(this.settings.showHud !== false);
     this.cup = new CupController({ client: this.client, bridge: this.bridge, game: this.game, native: this.native, hud: this.cupHud });
+    if (this.native) {
+      this.splits = new SplitsController({
+        native: this.native,
+        client: this.client,
+        enabled: () => this.settings.splits !== false,
+        roundTime: (game, car, frames) => {
+          const cup = this.cup;
+          const rt = cup.runtime;
+          if (!cup.active || !rt?.racer || rt.stage !== "race" || cup.phase !== "racing" || !cup.inLiveSession() || (game && game !== cup.activeGame)) return null;
+          return { inCup: true, frames: cup.lapFrames(frames), sessionId: rt.sessionId };
+        },
+      });
+    }
     if (SHOW_MENU_BUTTON) this.removeMenuButton = installMainMenuButton(() => this.toggleMenu());
     this.cupButton = installCupButton({
       onJoin: () => this.joinCup(),

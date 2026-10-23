@@ -64,9 +64,10 @@ const PORTED_MODS = [
   { id: "carswitcher", match: ["orangyspolymods/main/carswitcher"] },
   { id: "coolcars", match: ["jakobspolymods/main/coolcars"] },
   { id: "goofycars", match: ["jakobspolymods/main/goofycars"] },
-  { id: "husplits", match: ["orangyspolymods/main/husplits"] },
+  // PolyRanked has Trackmania-style splits of its own; Orangy's stays installed but off.
+  { id: "husplits", match: ["orangyspolymods/main/husplits"], loaded: false },
 ];
-for (const m of PORTED_MODS) BUILTIN_MODS.push({ base: `__SELF__/mods/${m.id}`, loaded: true, match: [`__SELF__/mods/${m.id}`, ...m.match] });
+for (const m of PORTED_MODS) BUILTIN_MODS.push({ base: `__SELF__/mods/${m.id}`, loaded: m.loaded !== false, match: [`__SELF__/mods/${m.id}`, ...m.match] });
 const extraMods = [];
 for (let i = 0; i < args.length; i++) if (args[i] === "--extra-mod" && args[i + 1]) extraMods.push(args[++i]);
 for (const m of (process.env.POLYRANKED_EXTRA_MODS ?? "").split(",")) if (m.trim()) extraMods.push(m.trim());

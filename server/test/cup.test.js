@@ -173,6 +173,10 @@ test("live round: a finish opens the finish window for the others, progress is r
   assert.deepEqual(rows.map((r) => r.slot), [2, 1], "the racer ahead on checkpoints leads the round ranking");
   assert.equal(rows[1].delta, 2000);
   assert.equal(cup.checkpoint("p1", cup.sessionId, 0, 13000), false, "checkpoints only move forward");
+  const splitFirst = io.last("p2", MSG.CUP_SPLIT);
+  assert.deepEqual({ index: splitFirst.index, frames: splitFirst.frames, position: splitFirst.position, count: splitFirst.count, best: splitFirst.best, delta: splitFirst.delta, leader: splitFirst.leaderNickname }, { index: 0, frames: 12000, position: 1, count: 1, best: null, delta: null, leader: null }, "the first racer at a checkpoint leads it");
+  const splitSecond = io.last("p1", MSG.CUP_SPLIT);
+  assert.deepEqual({ position: splitSecond.position, count: splitSecond.count, best: splitSecond.best, delta: splitSecond.delta, leader: splitSecond.leaderNickname }, { position: 2, count: 2, best: 12000, delta: 2000, leader: "Player 2" }, "the second one gets rank and gap to the leader");
 
   clock.advance(10000);
   assert.equal(cup.finish("p1", cup.sessionId, 30000), true);

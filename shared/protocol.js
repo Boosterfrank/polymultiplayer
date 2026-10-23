@@ -42,6 +42,7 @@ export const MSG = Object.freeze({
   PROFILE: "profile",
   CUP_STATE: "cup_state",
   CUP_END: "cup_end",
+  CUP_SPLIT: "cup_split", // answer to cup_checkpoint: rank and gap at that checkpoint
 });
 
 /** First byte of binary frames. */

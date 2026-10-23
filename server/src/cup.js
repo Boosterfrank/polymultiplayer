@@ -638,6 +638,7 @@ export class Cup {
       dnfs: new Set(),
       splits: new Map(),
       bestSplits: new Map(),
+      gates: new Map(), // checkpoint index -> Map(slot -> frames), first crossing per racer
       movement: new Map(),
       beforeRanking: cupOrder({ players: this.players.map((p) => ({ slot: p.slot, points: this.pointsOf(p) })) }),
     };
@@ -788,9 +789,28 @@ export class Cup {
     if (frames > now - run.startsAt + 2500) return false;
     const previous = run.splits.get(p.slot);
     if (previous && (index <= previous.index || frames < previous.frames)) return false;
+    const gate = run.gates.get(index) ?? new Map();
+    const bestBefore = run.bestSplits.get(index) ?? null;
+    const leaderBefore = bestBefore == null ? null : [...gate.entries()].find(([, f]) => f === bestBefore)?.[0] ?? null;
     this.trackMovement(() => {
       run.splits.set(p.slot, { index, frames });
-      run.bestSplits.set(index, Math.min(run.bestSplits.get(index) ?? Infinity, frames));
+      run.bestSplits.set(index, Math.min(bestBefore ?? Infinity, frames));
+      gate.set(p.slot, frames);
+      run.gates.set(index, gate);
+    });
+    // Trackmania-style split for the racer: rank at this checkpoint and the gap to the fastest there.
+    const position = 1 + [...gate.values()].filter((f) => f < frames).length;
+    this.send(p, {
+      type: MSG.CUP_SPLIT,
+      sessionId: run.sessionId,
+      index,
+      frames,
+      position,
+      count: gate.size,
+      best: bestBefore,
+      delta: bestBefore == null ? null : frames - bestBefore,
+      leaderSlot: leaderBefore,
+      leaderNickname: leaderBefore == null ? null : this.bySlot(leaderBefore)?.nickname ?? null,
     });
     this.broadcastState();
     return true;

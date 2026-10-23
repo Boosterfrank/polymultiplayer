@@ -44,6 +44,7 @@ const API_SOURCE = `({
   carThumbnail: (style) => kr.F(style, new Sr.A()),
   store: (g) => da.get(g),
   profiles: (g) => ha.get(g),
+  fastestGhost: (g) => ta.has(g) ? _s.call(g) : null,
 })`;
 
 const REQUIRED = ["Game", "KeyBinding", "Time", "read", "reset", "guardControls", "guardRestart", "settings", "input", "timer"];
@@ -143,6 +144,13 @@ export function connectGame(pml) {
     banner?.querySelectorAll(".record,.difference").forEach((node) => node.classList.add("hidden"));
   };
 
+  /** Functions called with (game, dt) before every frame of any in-game state (splits, ...). */
+  api.frameObservers = new Set();
+  api.onFrame = (fn) => {
+    api.frameObservers.add(fn);
+    return () => api.frameObservers.delete(fn);
+  };
+
   return api;
 }
 
@@ -157,6 +165,13 @@ export function installGameHooks(native, handlers) {
   proto.__polyRankedHooked = true;
   const update = proto.update;
   proto.update = function (...args) {
+    for (const fn of native.frameObservers) {
+      try {
+        fn(this, args[0]);
+      } catch (err) {
+        log.error("frame observer failed", err);
+      }
+    }
     let active = false;
     try {
       active = handlers.onGameUpdate(this, args[0]) === true;

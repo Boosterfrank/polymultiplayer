@@ -88,6 +88,7 @@ const siteUrl = `http://127.0.0.1:${site.port}/`;
 const selfModBase = `${siteUrl}mod`;
 const POLYCUP_BASE = "https://cdn.polymodloader.com/gh/Prawnfoot05/PolyCup/main/dist";
 const PORTED = ["carswitcher", "coolcars", "goofycars", "husplits"];
+const PORTED_ON = ["carswitcher", "coolcars", "goofycars"]; // Heads Up Splits is installed but off (PolyRanked has its own splits)
 console.log(`site: ${siteUrl}  ws: ${wsUrl}`);
 
 const stubFor = (id, name) => ({
@@ -154,21 +155,10 @@ try {
   check("fresh: PolyRanked registered but not loaded", !!rankedEntry && rankedEntry.loaded === false, JSON.stringify(rankedEntry));
   check("fresh: PolyCup registered and loaded", !!cupEntry && cupEntry.loaded === true, JSON.stringify(cupEntry));
   const carMods = PORTED.map((id) => mods.find((m) => m.base === `${siteUrl}mods/${id}`));
-  check("fresh: Car Switcher, Cool Cars, Goofy Cars and Heads Up Splits registered from the copy and loaded", carMods.every((m) => m && m.loaded === true), JSON.stringify(carMods));
+  check("fresh: Car Switcher, Cool Cars, Goofy Cars and Heads Up Splits registered from the copy (splits off by default)", carMods.every((m, i) => m && m.loaded === PORTED_ON.includes(PORTED[i])), JSON.stringify(carMods));
   const loaded = await fresh.page.evaluate(() => window.polyModLoader.getAllMods().map((m) => `${m.modID}:${m.isLoaded}`));
   check("fresh: pmlcore and polycup active, polyranked present but inactive", loaded.includes("pmlcore:true") && loaded.includes("polytrack-world-cup:true") && loaded.includes("polyranked:false"), loaded.join(", "));
-  check("fresh: the ported mods are active", PORTED.every((id) => loaded.includes(`${id}:true`)), loaded.join(", "));
-  const splits = await fresh.page.evaluate(() => {
-    const pml = window.polyModLoader;
-    let patched = null;
-    try {
-      patched = String(pml.getFromPolyTrack("Es.toString()")).includes("huSplitCpBox");
-    } catch (err) {
-      patched = `error: ${err.message}`;
-    }
-    return { patched, size: pml.getSetting("huSplitsSize"), speed: pml.getSetting("huSplitsShowSpeed") };
-  });
-  check("fresh: Heads Up Splits hooked the car creation routine and registered its settings", splits.patched === true && splits.size === "0.5" && String(splits.speed) === "true", JSON.stringify(splits));
+  check("fresh: the ported car mods are active, Heads Up Splits installed but off", PORTED_ON.every((id) => loaded.includes(`${id}:true`)) && loaded.includes("husplits:false"), loaded.join(", "));
   const prompt = await waitFor("fresh: garage prompt", () => fresh.page.evaluate(() => {
     const dialog = document.querySelector("dialog.message-box-ui");
     return dialog && dialog.open ? dialog.innerText : null;
@@ -216,6 +206,7 @@ try {
         { base: "https://cdn.polymodloader.com/pml/PolyModLoader/pmlcore", version: "latest", loaded: true },
         { base: selfModBase, version: "latest", loaded: true },
         { base: polycup, version: "latest", loaded: true },
+        { base: selfModBase.replace(/\/mod$/, "/mods/husplits"), version: "latest", loaded: true }, // switched on by this player
       ]));
       localStorage.setItem("polyranked.garagePrompted", "1");
       localStorage.setItem("MyCar", savedCar);
@@ -228,6 +219,17 @@ try {
   const pml = await enabled.page.evaluate(() => ({ version: window.pmlversion, mods: window.polyModLoader.getAllMods().map((m) => `${m.modID}@${m.modVersion}:${m.isLoaded}`), polyMods: JSON.parse(localStorage.getItem("polyMods")).length }));
   check("enabled: PolyModLoader reports its version from the relative package.json", /^v0\.6\.3/.test(pml.version), pml.version);
   check("enabled: all seven mods loaded, nothing registered twice", pml.mods.some((m) => /^polyranked@0\.\d+\.\d+:true$/.test(m)) && pml.mods.includes("polytrack-world-cup@0.0.0:true") && ["carswitcher@1.0.8:true", "coolcars@1.0.5:true", "goofycars@1.0.9:true", "husplits@2.1.4:true"].every((m) => pml.mods.includes(m)) && pml.polyMods === 7, pml.mods.join(", "));
+  const huSplits = await enabled.page.evaluate(() => {
+    const pml = window.polyModLoader;
+    let patched = null;
+    try {
+      patched = String(pml.getFromPolyTrack("Es.toString()")).includes("huSplitCpBox");
+    } catch (err) {
+      patched = `error: ${err.message}`;
+    }
+    return { patched, size: pml.getSetting("huSplitsSize"), speed: pml.getSetting("huSplitsShowSpeed"), widget: !!document.querySelector(".prs-split") };
+  });
+  check("enabled: Heads Up Splits (switched on) hooked the car creation routine; PolyRanked's own split widget exists", huSplits.patched === true && huSplits.size === "0.5" && String(huSplits.speed) === "true" && huSplits.widget === true, JSON.stringify(huSplits));
   check("enabled: mod bundles use the copy's own PolyTypes.js (no CDN import)", !enabled.logs.some((l) => l.includes("cdn.polymodloader.com/cb/")));
   await waitFor("enabled: connected", () => enabled.page.evaluate(() => globalThis.polyRanked.client.state === "ready"), 60000);
   check("enabled: mod connected to the baked-in default server", await enabled.page.evaluate(() => globalThis.polyRanked.settings.serverUrl) === wsUrl);

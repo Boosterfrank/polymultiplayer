@@ -117,8 +117,8 @@ session). Everything else client-side is trusted – it is a browser game mod.
 ## Repository layout
 
 ```
-manifest.json, 0.2.0/        PML install layout (install URL = repo root)
-mod/src/                     mod source (bundled with esbuild into 0.2.0/main.mod.js)
+manifest.json, 0.2.1/        PML install layout (install URL = repo root)
+mod/src/                     mod source (bundled with esbuild into 0.2.1/main.mod.js)
 shared/protocol.js           message names + binary framing shared by mod and server
 server/                      Node.js server (`npm start`), tests (`npm test`)
 mods/                        third-party mods ported to 0.6.3 for the game copy (see mods/README.md)

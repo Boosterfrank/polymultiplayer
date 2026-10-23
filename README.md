@@ -18,7 +18,7 @@ feed an Elo-style rating with divisions from Bronze to Trackmaster.
 1. Install PolyModLoader (web or app) – see the [PML wiki](https://wiki.polymodloader.com/for-users/).
 2. Open the PML mod manager and add the install URL above (pick *latest*), move the
    mod to *Loaded*, reload the game.
-3. A **Ranked** button appears next to *Multiplayer* in the main menu (shortcut: F7).
+3. Press **F7** in the main menu for the Ranked menu (the main-menu button is hidden for now); the always-on cup is on the *Multiplayer* page.
    Open *Settings* inside it and enter the address of a PolyRanked server
    (`wss://…`), then *Save*.
 4. Pick a queue. When a match is found the track loads automatically, a countdown
@@ -165,7 +165,7 @@ to Kodub.
 
 ```bash
 npm install                    # esbuild for the mod bundle
-npm run build                  # mod/src → 0.2.0/main.mod.js (+ POLYRANKED_DEFAULT_SERVER=wss://… to bake a default)
+npm run build                  # mod/src → 0.2.1/main.mod.js (+ POLYRANKED_DEFAULT_SERVER=wss://… to bake a default)
 npm test                       # mod unit tests + server tests (rules, rating, matchmaking, match engine, sockets)
 npm run dev                    # build, then run the server and serve the mod at http://localhost:8788/mod/
 npm run build:site             # self-contained PolyModLoader copy with the mod pre-installed -> dist/site/

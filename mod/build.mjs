@@ -14,7 +14,7 @@ const outdirArg = process.argv.indexOf("--outdir");
 const outdir = outdirArg >= 0 ? path.resolve(process.argv[outdirArg + 1]) : path.join(root, modVersion);
 fs.mkdirSync(outdir, { recursive: true });
 
-const defaultServer = process.env.POLYRANKED_DEFAULT_SERVER ?? "ws://localhost:8788";
+const defaultServer = process.env.POLYRANKED_DEFAULT_SERVER ?? "wss://hydrogen-granted-distributors-pos.trycloudflare.com";
 
 /** @type {import("esbuild").BuildOptions} */
 const options = {

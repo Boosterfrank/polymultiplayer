@@ -220,8 +220,7 @@ try {
   check("enabled: mod bundles use the copy's own PolyTypes.js (no CDN import)", !enabled.logs.some((l) => l.includes("cdn.polymodloader.com/cb/")));
   await waitFor("enabled: connected", () => enabled.page.evaluate(() => globalThis.polyRanked.client.state === "ready"), 60000);
   check("enabled: mod connected to the baked-in default server", await enabled.page.evaluate(() => globalThis.polyRanked.settings.serverUrl) === wsUrl);
-  await waitFor("enabled: ranked button", () => enabled.page.evaluate(() => !!document.querySelector(".polyranked-menu-button")), 60000);
-  check("enabled: Ranked button present in the main menu", true);
+  check("enabled: the Ranked main-menu button stays hidden for now", await enabled.page.evaluate(() => !document.querySelector(".polyranked-menu-button")));
   check("enabled: no duplicate Garage prompt", await enabled.page.evaluate(() => !document.querySelector("dialog.message-box-ui[open]")));
   const restored = await waitFor("enabled: saved car restored", () => enabled.page.evaluate(() => window.polyModLoader.getMod("carswitcher").activeCar), 120000, 500);
   const restoredState = await enabled.page.evaluate(() => {

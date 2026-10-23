@@ -1,4 +1,4 @@
-import { DEFAULT_SERVER_URL } from "./config.js";
+import { DEFAULT_SERVER_URL, LEGACY_DEFAULT_SERVER_URL } from "./config.js";
 
 const KEY_SECRET = "polyranked.secret";
 const KEY_SETTINGS = "polyranked.settings";
@@ -40,7 +40,10 @@ export function loadSettings() {
   try {
     const raw = s?.getItem(KEY_SETTINGS);
     const parsed = raw ? JSON.parse(raw) : {};
-    return { ...DEFAULT_SETTINGS, ...parsed };
+    const settings = { ...DEFAULT_SETTINGS, ...parsed };
+    // settings saved by an earlier build with the localhost placeholder follow the current default
+    if (!settings.serverUrl || settings.serverUrl === LEGACY_DEFAULT_SERVER_URL) settings.serverUrl = DEFAULT_SERVER_URL;
+    return settings;
   } catch {
     return { ...DEFAULT_SETTINGS };
   }

@@ -254,7 +254,7 @@ for (const { id } of PORTED_MODS) {
 fs.writeFileSync(path.join(outDir, ".nojekyll"), "");
 fs.writeFileSync(
   path.join(outDir, "polyranked-site.json"),
-  JSON.stringify({ builtAt: new Date().toISOString(), pmlCommit: PML_COMMIT, modVersion, defaultServer: process.env.POLYRANKED_DEFAULT_SERVER ?? "ws://localhost:8788", kodubProxy: kodubProxy || null, tutorial: false, builtinMods: BUILTIN_MODS.map((m) => ({ base: m.base, loaded: m.loaded })), portedMods: portedInfo }, null, 2) + "\n",
+  JSON.stringify({ builtAt: new Date().toISOString(), pmlCommit: PML_COMMIT, modVersion, defaultServer: process.env.POLYRANKED_DEFAULT_SERVER ?? "wss://hydrogen-granted-distributors-pos.trycloudflare.com", kodubProxy: kodubProxy || null, tutorial: false, builtinMods: BUILTIN_MODS.map((m) => ({ base: m.base, loaded: m.loaded })), portedMods: portedInfo }, null, 2) + "\n",
 );
 
 let total = 0;
@@ -262,4 +262,4 @@ const walk = (d) => {
   for (const e of fs.readdirSync(d, { withFileTypes: true })) e.isDirectory() ? walk(path.join(d, e.name)) : (total += fs.statSync(path.join(d, e.name)).size);
 };
 walk(outDir);
-console.log(`[site] built ${path.relative(root, outDir)} (${(total / 1024 / 1024).toFixed(1)} MB, ${(assetBytes / 1024 / 1024).toFixed(0)} MB of car models): PolyModLoader ${PML_COMMIT.slice(0, 7)} + PolyRanked ${modVersion}, default server ${process.env.POLYRANKED_DEFAULT_SERVER ?? "ws://localhost:8788"}, tutorial off, ranked ${rankedEnabled ? "on" : "off"} by default, built-in mods: ${BUILTIN_MODS.map((m) => m.base.replace("__SELF__", ".")).join(" ")}${kodubProxy ? `, backend via ${kodubProxy} (${proxiedCalls} call sites)` : ""}`);
+console.log(`[site] built ${path.relative(root, outDir)} (${(total / 1024 / 1024).toFixed(1)} MB, ${(assetBytes / 1024 / 1024).toFixed(0)} MB of car models): PolyModLoader ${PML_COMMIT.slice(0, 7)} + PolyRanked ${modVersion}, default server ${process.env.POLYRANKED_DEFAULT_SERVER ?? "wss://hydrogen-granted-distributors-pos.trycloudflare.com"}, tutorial off, ranked ${rankedEnabled ? "on" : "off"} by default, built-in mods: ${BUILTIN_MODS.map((m) => m.base.replace("__SELF__", ".")).join(" ")}${kodubProxy ? `, backend via ${kodubProxy} (${proxiedCalls} call sites)` : ""}`);

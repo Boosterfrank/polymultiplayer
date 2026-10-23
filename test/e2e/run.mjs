@@ -53,8 +53,8 @@ try {
     });
     if (!inMenu) await waitFor(`${p.name}: main menu`, () => p.page.evaluate(() => globalThis.polyRanked.bridge.getState() instanceof globalThis.polyRanked.bridge.getStateClasses().MainMenu), 30000);
     check(`${p.name}: main menu reachable through the bridge`, true);
-    await waitFor(`${p.name}: main menu button`, () => p.page.evaluate(() => !!document.querySelector(".polyranked-menu-button")), 120000, 500);
-    check(`${p.name}: Ranked button injected into the main menu`, true);
+    await waitFor(`${p.name}: ranked menu ready`, () => p.page.evaluate(() => !!globalThis.polyRanked?.menu), 120000, 500);
+    check(`${p.name}: Ranked main-menu button stays hidden (menu opens with F7)`, await p.page.evaluate(() => !document.querySelector(".polyranked-menu-button")));
     await p.page.screenshot({ path: path.join(artifacts, `${p.name}-menu.png`) });
   }
 
@@ -151,8 +151,8 @@ try {
   // back to the menu
   await players[0].page.click(".polyranked-overlay button:has-text('Back to menu')");
   await waitFor("main menu", () => players[0].page.evaluate(() => globalThis.polyRanked.bridge.getState() instanceof globalThis.polyRanked.bridge.getStateClasses().MainMenu), 30000);
-  const afterMenu = await players[0].page.evaluate(() => ({ button: !!document.querySelector(".polyranked-menu-button"), conn: globalThis.polyRanked.controller.connection, phase: globalThis.polyRanked.controller.phase, hudHidden: document.querySelector(".polyranked-hud")?.classList.contains("hidden") }));
-  check("Alice: back in the main menu, controller idle", afterMenu.button && afterMenu.conn === null && afterMenu.phase === "idle" && afterMenu.hudHidden, JSON.stringify(afterMenu));
+  const afterMenu = await players[0].page.evaluate(() => ({ conn: globalThis.polyRanked.controller.connection, phase: globalThis.polyRanked.controller.phase, hudHidden: document.querySelector(".polyranked-hud")?.classList.contains("hidden") }));
+  check("Alice: back in the main menu, controller idle", afterMenu.conn === null && afterMenu.phase === "idle" && afterMenu.hudHidden, JSON.stringify(afterMenu));
   await players[0].page.screenshot({ path: path.join(artifacts, "Alice-back-to-menu.png") });
 
   const lb = ranked.players.leaderboard("duel", 10);

@@ -148,7 +148,7 @@ export async function createHarness({ gameDir, serverCfg, headed = false }) {
       return inMenu;
     });
     if (!inMenu) await waitFor(`${p.name}: main menu`, () => p.page.evaluate(() => globalThis.polyRanked.bridge.getState() instanceof globalThis.polyRanked.bridge.getStateClasses().MainMenu), 30000);
-    await waitFor(`${p.name}: main menu button`, () => p.page.evaluate(() => !!document.querySelector(".polyranked-menu-button")), 120000, 500);
+    await waitFor(`${p.name}: ranked menu ready`, () => p.page.evaluate(() => !!globalThis.polyRanked?.menu), 120000, 500);
   }
 
   const pageErrors = () => players.flatMap((p) => p.logs.filter((l) => l.startsWith("[pageerror]") || (l.startsWith("[error]") && /PolyRanked|polyranked/i.test(l))).map((l) => `${p.name}: ${l}`));

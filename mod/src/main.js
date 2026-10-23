@@ -1,6 +1,6 @@
 import { PolyMod } from "https://cdn.polymodloader.com/cb/PolyTrackMods/PolyModLoader/0.6.3/PolyTypes.js";
 import { MSG } from "../../shared/protocol.js";
-import { MOD_ID, MOD_NAME, MOD_VERSION, GAME_VERSION } from "./config.js";
+import { MOD_ID, MOD_NAME, MOD_VERSION, GAME_VERSION, SHOW_MENU_BUTTON } from "./config.js";
 import { installBridgeMixin, waitForBridge, validateBridge, lookupGame, physicsDeterministic, physicsDeterminism } from "./bridge.js";
 import { RankedClient } from "./client.js";
 import { getSecret, loadSettings, saveSettings } from "./identity.js";
@@ -85,7 +85,7 @@ class PolyRankedApp {
     this.hud = new MatchHud({ serverNow: () => this.client.serverNow() });
     this.hud.setEnabled(this.settings.showHud !== false);
     this.controller = new MatchController({ client: this.client, bridge: this.bridge, game: this.game, hud: this.hud });
-    this.removeMenuButton = installMainMenuButton(() => this.toggleMenu());
+    if (SHOW_MENU_BUTTON) this.removeMenuButton = installMainMenuButton(() => this.toggleMenu());
     this.cupButton = installCupButton({
       onJoin: () => this.joinCup(),
       onLeave: () => this.controller.leaveCup(),
@@ -166,6 +166,7 @@ class PolyRankedApp {
 
   onGameLoad() {
     // The main menu exists now; make sure the button is there even if the observer missed it.
+    if (!SHOW_MENU_BUTTON) return;
     this.removeMenuButton?.();
     this.removeMenuButton = installMainMenuButton(() => this.toggleMenu());
   }

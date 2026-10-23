@@ -195,7 +195,7 @@ to Kodub.
 
 ```bash
 npm install                    # esbuild for the mod bundle
-npm run build                  # mod/src → 0.3.2/main.mod.js (+ POLYRANKED_DEFAULT_SERVER=wss://… to bake a default)
+npm run build                  # mod/src → 0.3.3/main.mod.js (+ POLYRANKED_DEFAULT_SERVER=wss://… to bake a default)
 npm test                       # mod unit tests + server tests (rules, rating, matchmaking, match engine, sockets)
 npm run dev                    # build, then run the server and serve the mod at http://localhost:8788/mod/
 npm run build:site             # self-contained PolyModLoader copy with the mod pre-installed -> dist/site/

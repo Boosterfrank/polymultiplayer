@@ -155,11 +155,9 @@ export const CSS = `
 .prs-row { display: flex; align-items: stretch; justify-content: center; }
 .prs-row.hidden, .prs-speed-delta.hidden, .prs-delta.hidden { display: none; }
 .prs-speed-row { margin: 0 14px; font-size: 15px; }
-.prs-speed-row > .prs-car { width: 14px; height: 11px; margin: 0 6px 0 8px; align-self: center; background: #6fd3c5; clip-path: polygon(20% 100%, 0 55%, 10% 30%, 40% 0, 80% 0, 100% 50%, 100% 100%); }
-.prs-speed { flex: 1; padding: 2px 10px 2px 0; background: rgba(12, 18, 44, .85); display: flex; align-items: center; }
-.prs-speed-row > .prs-car { position: absolute; }
 .prs-speed-row { position: relative; }
-.prs-speed-row .prs-speed { padding-left: 30px; }
+.prs-speed-row > .prs-car { position: absolute; left: 9px; top: 50%; width: 14px; height: 11px; transform: translateY(-50%); background: #6fd3c5; clip-path: polygon(20% 100%, 0 55%, 10% 30%, 40% 0, 80% 0, 100% 50%, 100% 100%); }
+.prs-speed { flex: 1; padding: 2px 10px 2px 30px; background: rgba(12, 18, 44, .85); display: flex; align-items: center; justify-content: flex-end; }
 .prs-speed-delta { min-width: 38px; padding: 2px 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; }
 .prs-speed-delta.faster { background: #2d9d5b; } .prs-speed-delta.slower { background: #e2772c; }
 .prs-main { gap: 10px; padding: 3px 12px; background: rgba(12, 18, 44, .88); font-size: 20px; line-height: 1.1; }

@@ -11,6 +11,7 @@ with `latest["0.6.3"]`, and a version folder with `version.json`, `main.mod.js`,
 | Car Switcher (`carswitcher`) | 1.0.8 | Orangy, [OrangysPolyMods](https://github.com/0rangy/OrangysPolyMods) `carswitcher/1.0.7` @ `2ecd49e` | PolyTrack 0.6.2 |
 | Cool Cars (`coolcars`) | 1.0.5 | CRJakob, [jakobspolymods](https://github.com/CRJakob/jakobspolymods) `coolcars/1.0.4` @ `b3ae155` | PolyTrack 0.5.1 |
 | Goofy Cars (`goofycars`) | 1.0.9 | CRJakob, [jakobspolymods](https://github.com/CRJakob/jakobspolymods) `goofycars/1.0.8` @ `b3ae155` | PolyTrack 0.5.1 |
+| Heads Up Splits (`husplits`) | 2.1.4 | Orangy, [OrangysPolyMods](https://github.com/0rangy/OrangysPolyMods) `husplits/2.1.3` @ `2ecd49e` | PolyTrack 0.6.2 |
 
 The GitHub repositories are mirrors of the authors' Codeberg repositories
 (`https://codeberg.org/CRJakob/jakobspolymods`, which the PolyModLoader CDN serves
@@ -25,8 +26,9 @@ PolyModLoader straight from this repository through the CDN:
 * `https://cdn.polymodloader.com/gh/boosterfrank/polymultiplayer/main/mods/carswitcher`
 * `https://cdn.polymodloader.com/gh/boosterfrank/polymultiplayer/main/mods/coolcars`
 * `https://cdn.polymodloader.com/gh/boosterfrank/polymultiplayer/main/mods/goofycars`
+* `https://cdn.polymodloader.com/gh/boosterfrank/polymultiplayer/main/mods/husplits`
 
-(Car Switcher first; the car packs depend on it.) `assets.json` next to them
+(Car Switcher first; the car packs depend on it. Heads Up Splits has no assets.) `assets.json` next to them
 records where each file came from (repository, commit, path) and its SHA-256;
 `tools/build-site.mjs` verifies the checksums when building the game copy.
 
@@ -61,6 +63,13 @@ records where each file came from (repository, commit, path) and its SHA-256;
 **Cool Cars / Goofy Cars**: 0.6.3 layout, dependency `carswitcher ^1.0.2`, the
 non-existent `audio/engine.flac` replaced by the game's `audio/engine.mp3`; the
 car lists are unchanged.
+
+**Heads Up Splits** (`mods/husplits/2.1.4/main.mod.js`): the mod inserts a
+checkpoint callback into the routine that creates the player's car and compares
+the split with the fastest ghost. Only the minified names changed between 0.6.2
+and 0.6.3: that routine is `Es` (was `gs`), the ghost getter is
+`(0, R.gn)(this, ta, "m", _s)` (was `jr` / `As`) and the time formatter is `He.A`
+(was `Ve.A`); the insertion token, the settings and the UI are unchanged.
 
 ## Licensing
 

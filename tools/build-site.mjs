@@ -64,6 +64,7 @@ const PORTED_MODS = [
   { id: "carswitcher", match: ["orangyspolymods/main/carswitcher"] },
   { id: "coolcars", match: ["jakobspolymods/main/coolcars"] },
   { id: "goofycars", match: ["jakobspolymods/main/goofycars"] },
+  { id: "husplits", match: ["orangyspolymods/main/husplits"] },
 ];
 for (const m of PORTED_MODS) BUILTIN_MODS.push({ base: `__SELF__/mods/${m.id}`, loaded: true, match: [`__SELF__/mods/${m.id}`, ...m.match] });
 const extraMods = [];

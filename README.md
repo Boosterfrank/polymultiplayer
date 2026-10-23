@@ -130,6 +130,9 @@ registers a set of built-in mods in every player's mod list:
   PolyModLoader through the CDN, e.g.
   `https://cdn.polymodloader.com/gh/boosterfrank/polymultiplayer/main/mods/carswitcher`
   (then `.../mods/coolcars` and `.../mods/goofycars`);
+* **Heads Up Splits** (Orangy), ported to 0.6.3 the same way, on: checkpoint
+  splits against your fastest ghost in the middle of the screen
+  (`https://cdn.polymodloader.com/gh/boosterfrank/polymultiplayer/main/mods/husplits`);
 * anything else you pass with `--extra-mod <url>[=off]` or `POLYRANKED_EXTRA_MODS`.
 
 Each entry is added once; players can still unload or remove them.
@@ -208,6 +211,7 @@ PolyTrack is made by [Kodub](https://www.kodub.com). PolyModLoader is a
 community project; this mod only uses its public API and the game's own
 multiplayer plumbing. PolyRanked is not affiliated with either.
 
-The game copy bundles ports of **Car Switcher** by Orangy and **Cool Cars** /
-**Goofy Cars** by CRJakob (see [mods/README.md](mods/README.md) for the sources,
-what the ports change and the licensing situation).
+The game copy bundles ports of **Car Switcher** and **Heads Up Splits** by
+Orangy and **Cool Cars** / **Goofy Cars** by CRJakob (see
+[mods/README.md](mods/README.md) for the sources, what the ports change and the
+licensing situation).

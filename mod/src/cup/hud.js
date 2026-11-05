@@ -44,6 +44,7 @@ export class CupHud {
     for (const node of [this.root, this.povEl, this.pbEl, this.timerEl, this.cueEl, this.downtimeEl, this.practiceEl, this.noticeEl, this.overlay]) ui.appendChild(node);
     this.lobbyEl = null;
     this.lobbyCountdownEl = null;
+    this.resultsObserver = null;
     this.ticker = null;
     this.signature = null;
     this.cueValue = "";
@@ -79,6 +80,7 @@ export class CupHud {
     if (this.ticker) clearInterval(this.ticker);
     this.ticker = null;
     this.hideLobby();
+    this.stopResultsObserver();
     this.restoreHints();
     for (const node of [this.root, this.povEl, this.pbEl, this.cueEl, this.downtimeEl, this.practiceEl, this.noticeEl]) node.classList.add("hidden");
     this.timerEl.classList.remove("visible");
@@ -112,6 +114,67 @@ export class CupHud {
     clearChildren(this.overlay);
     this.lobbyEl = null;
     this.lobbyCountdownEl = null;
+  }
+
+  toggleLobby() {
+    if (this.overlay.classList.contains("hidden")) this.showLobby();
+    else this.hideLobby();
+  }
+
+  // ------------------------------------------------------------- the game's Session Results dialog
+
+  /**
+   * When the game shows its Session Results (cup decided, or too few racers), its list of best
+   * times is replaced by the cup's places and points, with the winner on top.
+   */
+  startResultsObserver() {
+    if (this.resultsObserver) return;
+    const ui = document.getElementById("ui");
+    if (!ui) return;
+    this.resultsObserver = new MutationObserver(() => this.renderResults());
+    this.resultsObserver.observe(ui, { childList: true, subtree: true });
+    this.renderResults();
+  }
+
+  stopResultsObserver() {
+    this.resultsObserver?.disconnect();
+    this.resultsObserver = null;
+  }
+
+  renderResults() {
+    const c = this.c;
+    const state = c?.state;
+    const list = document.querySelector(".session-end-ui .player-list-ui") ?? document.querySelector(".player-list-ui");
+    if (!list || !state || !c.gameStarted || !(state.phase === "complete" || state.phase === "idle")) return;
+    const content = list.querySelector(".content");
+    const title = list.querySelector("h2");
+    if (!content || !title) return;
+    const rows = standings(state);
+    const key = JSON.stringify([state.phase, state.winner?.slot, state.nextAt, rows.map((r) => [r.slot, r.score, r.gain])]);
+    // The game rebuilds this list whenever the player list changes; a marker inside tells our rows apart.
+    const marker = content.querySelector("[data-prc-cup]");
+    if (marker && marker.dataset.prcCup === key) return;
+    title.textContent = state.winner ? `${state.winner.nickname} wins cup #${state.cupNumber}` : state.phase === "idle" ? "Cup standings – waiting for racers" : "Cup standings";
+    clearChildren(content);
+    content.appendChild(el("span", { attrs: { hidden: "", "data-prc-cup": key } }));
+    rows.forEach((r, i) => {
+      const row = el("div", { className: r.slot === c.you ? "self" : "" });
+      const place = i + 1;
+      const position = el("div", { className: "position", text: String(place) }, [el("span", { text: ["st", "nd", "rd"][place - 1] ?? "th" })]);
+      row.appendChild(position);
+      row.appendChild(el("div", { className: "time", text: `${r.score} pts` }));
+      const img = el("img", { className: "car-thumbnail", attrs: { src: this.thumbs.get(r.slot) ?? PLACEHOLDER_CAR, alt: "", draggable: "false" } });
+      if (!this.thumbs.has(r.slot)) c.carThumbnail(r.slot).then((url) => url && img.isConnected && (img.src = url));
+      row.appendChild(img);
+      const name = el("div", { className: "nickname" }, [el("span", { text: r.nickname })]);
+      if (r.slot === c.you) name.appendChild(el("span", { className: "self", text: "(You)" }));
+      row.appendChild(name);
+      const tail = el("div", { className: "ping prc-result-tail" });
+      if (r.winner) tail.appendChild(el("span", { className: "prc-result-winner", text: "WINNER" }));
+      else if (r.gain) tail.appendChild(el("span", { text: `+${r.gain}` }));
+      row.appendChild(tail);
+      content.appendChild(row);
+    });
   }
 
   renderLobby() {
@@ -195,6 +258,10 @@ export class CupHud {
       c.mayWatch(),
       c.watchable(),
     ]);
+    if (state.phase === "complete" || state.phase === "idle") {
+      this.startResultsObserver();
+      this.renderResults();
+    } else this.stopResultsObserver();
     if (!force && key === this.signature) {
       this.renderLobby();
       return;
@@ -249,7 +316,8 @@ export class CupHud {
       row.appendChild(name);
       const move = el("small", { className: `prc-move ${r.movement < 0 ? "down" : "up"}`, text: r.movement > 0 ? `▲${r.movement}` : r.movement < 0 ? `▼${-r.movement}` : "" });
       row.appendChild(move);
-      row.appendChild(el("span", { className: "prc-points" }, [el("strong", { text: String(r.score) }), el("small", { className: r.provisional ? "projected" : "", text: r.gain ? `+${r.gain}` : "" })]));
+      const recordBonus = !r.provisional && state.lastRound?.recordSlot === r.slot;
+      row.appendChild(el("span", { className: "prc-points" }, [el("strong", { text: String(r.score) }), el("small", { className: `${r.provisional ? "projected" : ""}${recordBonus ? " record" : ""}`, text: r.gain ? `+${r.gain}${recordBonus ? " TR" : ""}` : "" })]));
       const reading = r.frames ?? r.splitFrames;
       const showGap = state.phase === "racing" ? i > 0 && r.delta != null : r.delta != null && r.delta > 0;
       const text = r.dnf ? "DNF" : reading == null ? "—" : showGap ? fmtGap(r.delta ?? 0) : fmtTime(reading);

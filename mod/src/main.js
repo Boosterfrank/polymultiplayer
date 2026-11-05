@@ -8,7 +8,7 @@ import { getSecret, loadSettings, saveSettings } from "./identity.js";
 import { MatchController } from "./match.js";
 import { injectStyles } from "./ui/styles.js";
 import { installMainMenuButton } from "./ui/mainmenu.js";
-import { installCupButton } from "./ui/cupbutton.js";
+import { installCupButton, installCupMenuBarButton } from "./ui/cupbutton.js";
 import { RankedMenu } from "./ui/menu.js";
 import { MatchHud } from "./ui/hud.js";
 import { CupController } from "./cup/controller.js";
@@ -85,6 +85,7 @@ class PolyRankedApp {
     this.pendingCupJoin = false;
     this.cupNotice = null;
     this.cupButton = null;
+    this.removeCupMenuButton = null;
   }
 
   start() {
@@ -118,6 +119,11 @@ class PolyRankedApp {
       fetchState: () => this.fetchCupState(),
       localState: () => ({ inCup: this.cup.active, phase: this.cup.phase, racing: this.cup.isRacer(), notice: this.cupNotice }),
       serverNow: () => this.client.serverNow(),
+    });
+    this.removeCupMenuButton = installCupMenuBarButton({
+      onClick: () => {
+        if (this.cup.menuButton() === "join") this.joinCup();
+      },
     });
     this.onKeyDown = (ev) => {
       if (ev.code === "F7" && !ev.repeat) {

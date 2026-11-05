@@ -32,7 +32,7 @@ const harness = await createHarness({
       disconnectGraceSeconds: 5,
       lateFinishGraceMs: 300,
       roundLimit: { enabled: true, multiplier: 4, minimumSeconds: 60, withoutWrSeconds: 60 },
-      breakSeconds: 4,
+      breakSeconds: 9,
       idleResetSeconds: 30,
       worldRecords: { enabled: false },
     },
@@ -191,8 +191,11 @@ try {
   await bob.page.keyboard.press("KeyT");
   await alice.page.screenshot({ path: path.join(artifacts, "Alice-cup-spectating.png") });
   await waitFor("server: round 1 over", () => ranked.cup.phase !== "racing", 8000, 100);
-  const retired = await bob.page.evaluate(() => ({ retired: globalThis.polyRanked.cup.runtime?.retired ?? null, done: globalThis.polyRanked.cup.runtime?.done ?? null }));
+  const retired = await bob.page.evaluate(() => ({ retired: globalThis.polyRanked.cup.runtime?.retired ?? null, done: globalThis.polyRanked.cup.runtime?.done ?? null, parked: globalThis.polyRanked.cup.gameInfo?.car?.hasStarted() === false }));
   check("Bob: T retired him (DNF) and that closed the round", retired.retired === true && ranked.cup.lastRound?.dnfs?.length === 1, JSON.stringify({ ...retired, dnfs: ranked.cup.lastRound?.dnfs }));
+  check("Bob: his car went back to the start line (not rolling on towards the finish)", retired.parked === true, JSON.stringify(retired));
+  const hiddenForAlice = await waitFor("Alice: Bob's car hidden", () => alice.page.evaluate(() => globalThis.polyRanked.cup.hiddenCars.has(2)), 4000, 100);
+  check("Alice: the retired racer's car is hidden on her screen", hiddenForAlice === true);
   check("round 1: Alice 10 points, Bob 0", JSON.stringify(ranked.cup.pointsBySlot()) === JSON.stringify({ 1: 10, 2: 0 }), JSON.stringify(ranked.cup.pointsBySlot()));
   const standingsA = await waitFor("Alice: CUP STANDINGS after the round", async () => {
     const t = await hudText(alice);
@@ -217,6 +220,12 @@ try {
   await alice.page.evaluate(() => globalThis.polyRanked.cup.reportFinish(2600));
   await bob.page.evaluate(() => globalThis.polyRanked.cup.reportFinish(3200));
   await waitFor("server: cup over", () => ranked.cup.phase === "complete", 10000, 100);
+  const resultsA = await waitFor("Alice: cup results in the dialog", () => alice.page.evaluate(() => {
+    const list = document.querySelector(".player-list-ui");
+    const text = list?.innerText?.replace(/\s+/g, " ") ?? "";
+    return /pts/.test(text) ? { title: list.querySelector("h2")?.textContent, text } : null;
+  }), 8000, 100);
+  check("the Session Results show the cup's places and points with the winner", /Alice wins cup #1/.test(resultsA.title) && /1 st 20 pts Alice.*WINNER/.test(resultsA.text) && /2 nd 8 pts Bob/.test(resultsA.text), JSON.stringify(resultsA).slice(0, 240));
   for (const p of players) await waitFor(`${p.name}: cup over in the HUD`, async () => /CUP WINNER/.test(await hudText(p)), 8000, 100);
   const overA = await alice.page.evaluate(() => ({ hud: document.querySelector(".prc-hud")?.innerText?.replace(/\s+/g, " ") ?? "", phase: document.querySelector(".prc-phase")?.innerText ?? "", notice: document.querySelector(".prc-notice")?.innerText ?? "" }));
   check("Alice: winner strip, final standings 20/8, next cup countdown", /CUP WINNER Alice/.test(overA.hud) && /20/.test(overA.hud) && /8/.test(overA.hud) && /Cup over/.test(overA.phase) && /next cup in/.test(overA.phase) && /You win the cup/.test(overA.notice), JSON.stringify(overA).slice(0, 300));
@@ -225,7 +234,7 @@ try {
   await alice.page.screenshot({ path: path.join(artifacts, "Alice-cup-over.png") });
 
   // the next cup starts by itself after the break
-  await waitFor("cup #2 round 1", () => alice.page.evaluate(() => globalThis.polyRanked.cup.state?.cupNumber === 2 && globalThis.polyRanked.cup.state.round === 1 && ["loading", "warmup", "countdown", "racing"].includes(globalThis.polyRanked.cup.phase)), 30000);
+  await waitFor("cup #2 round 1", () => alice.page.evaluate(() => globalThis.polyRanked.cup.state?.cupNumber === 2 && globalThis.polyRanked.cup.state.round === 1 && ["loading", "warmup", "countdown", "racing"].includes(globalThis.polyRanked.cup.phase)), 40000);
   for (const p of players) await waitFor(`${p.name}: in game for cup #2`, () => inGame(p), 20000, 250);
   const cup2 = await alice.page.evaluate(() => ({ points: globalThis.polyRanked.cup.state.players.map((p) => p.points), winner: globalThis.polyRanked.cup.state.winner }));
   check("cup #2 started automatically with the standings reset", cup2.points.every((v) => v === 0) && cup2.winner === null, JSON.stringify(cup2));
@@ -247,6 +256,14 @@ try {
   }, 10000, 200);
   check("Alice: still in the cup, HUD waits for racers", aliceAlone.active && aliceAlone.players === 1, JSON.stringify(aliceAlone).slice(0, 200));
   check("fewer than two racers: the Session Results dialog is shown", await waitFor("Alice: session results while idle", () => sessionEnd(alice), 5000, 100), "");
+  const idleResults = await waitFor("Alice: standings in the idle dialog", () => alice.page.evaluate(() => {
+    const list = document.querySelector(".player-list-ui");
+    const text = list?.innerText?.replace(/\s+/g, " ") ?? "";
+    return /pts/.test(text) ? { title: list.querySelector("h2")?.textContent, text } : null;
+  }), 5000, 100);
+  check("the idle dialog shows the cup standings", /waiting for racers/.test(idleResults.title) && /Alice/.test(idleResults.text) && /pts/.test(idleResults.text), JSON.stringify(idleResults).slice(0, 200));
+  const recordRound = ranked.cup.lastRound;
+  check("server: Alice's lone round scored 10, or 15 with the track-record bonus", [10, 15].includes(recordRound?.points?.[1]) && (recordRound.recordSlot == null || recordRound.points[1] === 15), JSON.stringify({ points: recordRound?.points, recordSlot: recordRound?.recordSlot }));
 
   // Alice leaves; the cup is empty
   await alice.page.evaluate(() => globalThis.polyRanked.cup.leaveCup());
@@ -255,7 +272,19 @@ try {
   const api = await (await fetch(`${httpUrl}/api/cup`)).json();
   check("GET /api/cup reports the empty, idle lobby with the rules and the cup count", api.enabled === true && api.phase === "idle" && api.players.length === 0 && api.cupsCompleted === 1 && api.rules.target === 18 && api.live === null, JSON.stringify({ phase: api.phase, players: api.players.length, cups: api.cupsCompleted }));
 
-  // Bob can come back any time: the box offers to join again
+  // Bob can come back any time: the trophy button in the main menu's bottom bar joins the cup
+  const barButton = await waitFor("Bob: trophy button in the bottom bar", () => bob.page.evaluate(() => {
+    const b = document.querySelector(".menu-ui .button-bar .polyranked-cup-menu-button");
+    if (!b) return null;
+    const siblings = [...b.parentElement.children].map((c) => c.querySelector("img")?.getAttribute("src") ?? c.className);
+    return { siblings, title: b.title };
+  }), 15000, 300);
+  check("Bob: a Quickplay Cup button sits between the music and the terms buttons", barButton.siblings.some((s) => /music/.test(s)) && barButton.siblings.some((s) => /gavel/.test(s)) && barButton.siblings.indexOf(barButton.siblings.find((s) => /music/.test(s))) < barButton.siblings.findIndex((s) => /trophy|svg\+xml/.test(s)), JSON.stringify(barButton));
+  await bob.page.evaluate(() => document.querySelector(".polyranked-cup-menu-button").click());
+  await waitFor("Bob: joined through the bottom bar", () => bob.page.evaluate(() => globalThis.polyRanked.cup.active), 15000, 200);
+  check("Bob: the bottom-bar button joined the cup and the lobby overlay is up", await bob.page.evaluate(() => !document.querySelector(".prc-lobby-overlay").classList.contains("hidden")));
+  await bob.page.evaluate(() => globalThis.polyRanked.cup.leaveCup());
+  await waitFor("server: cup empty again", () => ranked.cup.members.size === 0, 10000, 200);
   await openMultiplayerPage(bob);
   const again = await waitFor("Bob: box shows the empty lobby", async () => {
     const t = await boxStatus(bob);

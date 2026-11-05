@@ -2,6 +2,43 @@ import { el, formatSeconds } from "../util.js";
 import { TROPHY_SVG } from "./mainmenu.js";
 
 const BOX_CLASS = "polyranked-cup";
+const MENU_BUTTON_CLASS = "polyranked-cup-menu-button";
+
+/**
+ * A trophy button in the main menu's bottom bar (next to fullscreen and music) that joins the
+ * Quickplay Cup, or brings the lobby back while waiting in the menu.
+ * @param {{onClick(): void}} opts
+ * @returns {() => void} dispose
+ */
+export function installCupMenuBarButton({ onClick }) {
+  const ui = document.getElementById("ui");
+  if (!ui) return () => {};
+  const tryInject = () => {
+    const bar = ui.querySelector(".menu-ui .button-bar");
+    if (!bar || bar.querySelector("." + MENU_BUTTON_CLASS)) return;
+    const music = bar.querySelector('button img[src^="images/music"]')?.closest("button");
+    const button = el("button", {
+      className: "button " + MENU_BUTTON_CLASS,
+      attrs: { title: "Quickplay Cup – join the always-on cup" },
+      on: {
+        click: (ev) => {
+          ev.preventDefault();
+          onClick();
+        },
+      },
+    });
+    button.appendChild(el("img", { attrs: { src: TROPHY_SVG, alt: "Quickplay Cup" } }));
+    if (music) music.insertAdjacentElement("afterend", button);
+    else bar.insertBefore(button, bar.querySelector("button.right"));
+  };
+  const observer = new MutationObserver(() => tryInject());
+  observer.observe(ui, { childList: true, subtree: true });
+  tryInject();
+  return () => {
+    observer.disconnect();
+    ui.querySelector("." + MENU_BUTTON_CLASS)?.remove();
+  };
+}
 
 /**
  * A big "Join the Cup" box above the game's own multiplayer page (`.multiplayer-ui > .join`),

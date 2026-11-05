@@ -122,6 +122,8 @@ export const DEFAULT_CONFIG = {
      * `enabled: false` keeps PolyCup's behaviour (the round lasts until everyone finished or retired).
      */
     roundLimit: { enabled: true, multiplier: 4, minimumSeconds: 120, withoutWrSeconds: 300 },
+    /** Beating the track's cup record multiplies that round's points for the record setter (1 = off). */
+    recordBonus: 1.5,
     /** Pause between a cup's end and the next one. */
     breakSeconds: 20,
     /** An idle lobby forgets its standings after this long without players. */

@@ -120,6 +120,10 @@ export const CSS = `
 .prc-points > strong { font-size: 24px; font-weight: normal; }
 .prc-points > small { font-size: 18px; color: #76e8ba; }
 .prc-points > small.projected { color: var(--prc-gold); }
+.prc-points > small.record { color: var(--prc-gold); }
+.prc-result-tail { white-space: nowrap; }
+.prc-result-winner { color: #ffd26b; }
+.polyranked-cup-menu-button img { filter: none; }
 .prc-row.self .prc-points > small { color: #0b4d35; }
 .prc-time { align-self: stretch; display: flex; justify-content: center; align-items: center; margin: 2px 10px 2px 0; padding: 0 10px; background: #e9f1f8; color: #152238; font-size: 20px; white-space: nowrap; clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%); }
 .prc-round-timer { position: absolute; right: 0; bottom: 164px; min-width: 106px; padding: 9px 20px 9px 28px; box-sizing: border-box; background: var(--prc-deep); clip-path: polygon(14px 0, 100% 0, 100% 100%, 0 100%); color: #ff747c; font-size: 36px; line-height: 1; text-align: center; font-variant-numeric: tabular-nums; pointer-events: none; transform: translateX(100%); opacity: 0; transition: transform .22s ease-out, opacity .15s ease-out; z-index: 22; }

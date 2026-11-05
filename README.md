@@ -44,7 +44,9 @@ refused.
 ### The always-on Quickplay Cup
 
 Open **Multiplayer** in the main menu and the page carries a big **Join the Cup**
-button with the live state of the cup (who is racing, which track, who leads).
+button with the live state of the cup (who is racing, which track, who leads);
+the trophy button in the main menu's bottom bar (next to fullscreen and music)
+joins it straight away.
 The cup is one permanent lobby on the ranked server that plays like a
 [PolyCup](https://github.com/Prawnfoot05/PolyCup) running the Quickplay preset:
 
@@ -64,10 +66,15 @@ The cup is one permanent lobby on the ranked server that plays like a
   live **ROUND RANKING** with gaps, the world record (WR) and the server's cup
   record for the track (TR: the fastest cup finish ever set on it and who set
   it, kept in the server's data file across cups and restarts);
-* places score **10/8/6/5/4/3/2/1**, the first racer at **120 points** with a
-  unique lead wins the cup; after a short break the standings reset and the
-  next cup starts automatically. Times set in the cup go to the normal
-  leaderboards;
+* places score **10/8/6/5/4/3/2/1**, beating the track's cup record earns the
+  record setter **1.5 x** that round's points, and the first racer at
+  **120 points** with a unique lead wins the cup; after a short break the
+  standings reset and the next cup starts automatically. Times set in the cup go
+  to the normal leaderboards;
+* a retired racer's car (and one whose finish window ran out) goes back to the
+  start line and disappears for the others, so nobody mistakes it for a finish;
+  the game's Session Results, shown when the cup is decided or racers run out,
+  list the cup's places and points with the winner;
 * it does not affect ranked ratings; cup wins have their own leaderboard
   (`/api/cup/leaderboard`) and the track records are listed at
   `/api/cup/records`.
@@ -195,7 +202,7 @@ to Kodub.
 
 ```bash
 npm install                    # esbuild for the mod bundle
-npm run build                  # mod/src → 0.3.3/main.mod.js (+ POLYRANKED_DEFAULT_SERVER=wss://… to bake a default)
+npm run build                  # mod/src → 0.3.4/main.mod.js (+ POLYRANKED_DEFAULT_SERVER=wss://… to bake a default)
 npm test                       # mod unit tests + server tests (rules, rating, matchmaking, match engine, sockets)
 npm run dev                    # build, then run the server and serve the mod at http://localhost:8788/mod/
 npm run build:site             # self-contained PolyModLoader copy with the mod pre-installed -> dist/site/

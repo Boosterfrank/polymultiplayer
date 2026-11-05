@@ -46,6 +46,7 @@ export class CupController extends Emitter {
     this.activeGame = null;
     this.gameInfo = null;
     this.uploadsGame = null;
+    this.hiddenCars = new Set(); // slots whose car is hidden on this screen (retired / timed out)
     this.thumbnails = new Map();
     this._unsubs = [];
     this.listen();
@@ -295,11 +296,22 @@ export class CupController extends Emitter {
     // The session goes on through the break (the next round restarts the game); the game's own
     // Session Results only appear when the cup is decided or the lobby runs out of racers.
     if (msg.cupOver) this.connection?.endSession(msg.sessionId);
+    const rt = this.runtime;
+    const timedOut = rt?.racer && rt.sessionId === msg.sessionId && !rt.done;
+    if (timedOut) {
+      // The finish window closed on us: a DNF. The car goes back to the start so nobody mistakes it for a finish.
+      rt.done = true;
+      rt.retired = "timeout";
+      this.parkCar();
+    }
     if (msg.cup) this.applyState(msg.cup, { silent: true });
     const mine = msg.results?.find((r) => r.slot === this.you);
-    if (mine && this.runtime?.racer) {
-      const place = mine.position ? `${mine.position}${["st", "nd", "rd"][mine.position - 1] ?? "th"}` : "DNF";
-      this.hud.notice(`Round ${msg.round}: ${place}${mine.points ? ` · +${mine.points}` : ""}`, 4000);
+    if (mine && rt?.racer) {
+      const place = mine.position ? `${mine.position}${["st", "nd", "rd"][mine.position - 1] ?? "th"}` : timedOut ? "time's up – DNF" : "DNF";
+      const record = mine.record ? ` · new track record, ×${msg.cup?.lastRound?.recordBonus ?? this.rules.recordBonus ?? 1.5} points` : "";
+      this.hud.notice(`Round ${msg.round}: ${place}${mine.points ? ` · +${mine.points}` : ""}${record}`, record ? 6000 : 4000);
+    } else if (msg.cup?.lastRound?.recordSlot != null) {
+      this.hud.notice(`${this.playerName(msg.cup.lastRound.recordSlot)} set a new track record (×${msg.cup.lastRound.recordBonus} points)`, 5000);
     }
     if (msg.nextTrack) this.prefetchTrack(msg.nextTrack);
     this.releaseView();
@@ -484,9 +496,47 @@ export class CupController extends Emitter {
     rt.done = true;
     rt.retired = true;
     this.client.send({ type: MSG.CUP_DNF, matchId: this.match?.matchId, sessionId: rt.sessionId });
+    this.parkCar();
     this.hud.notice("Retired from this round", 3000);
     this.hud.update();
     return true;
+  }
+
+  /**
+   * A retired or timed-out car must not keep rolling towards the finish: put it back on the start
+   * line (the game's reset also tells the others, whose copy of the car is hidden as well).
+   */
+  parkCar() {
+    const game = this.activeGame;
+    if (!game || !this.native || !this.gameInfo || this.gameInfo.ended) return;
+    this.releaseView(game);
+    safe(() => this.native.reset(game), "reset");
+    this.gameInfo = this.native.read(game);
+  }
+
+  /** Racers whose car should not be shown any more this round (retired or out of time). */
+  hiddenSlots() {
+    const live = this.live;
+    if (live && this.phase === "racing") return live.dnfs ?? [];
+    if (!live && this.state?.lastRound && (this.phase === "break" || this.phase === "complete" || this.phase === "idle")) return this.state.lastRound.dnfs ?? [];
+    return [];
+  }
+
+  /** Hide the cars of retired racers; show them again when a new round starts. */
+  applyCarVisibility(info) {
+    const hide = new Set(this.hiddenSlots().filter((slot) => slot !== this.you));
+    for (const slot of this.hiddenCars) {
+      if (!hide.has(slot)) {
+        info.remoteCars?.get(slot)?.car?.setVisible?.(true);
+        this.hiddenCars.delete(slot);
+      }
+    }
+    for (const slot of hide) {
+      const entry = info.remoteCars?.get(slot);
+      if (!entry?.car) continue;
+      entry.car.setVisible?.(false);
+      this.hiddenCars.add(slot);
+    }
   }
 
   /** A respawn before the first checkpoint: a new run, but the round clock keeps counting. */
@@ -630,6 +680,7 @@ export class CupController extends Emitter {
     const info = this.gameInfo;
     if (!info || game !== this.activeGame || !this.native) return;
     const rt = this.runtime;
+    if (info.sessionId === this.runtime?.sessionId) this.applyCarVisibility(info);
     const mayWatch = this.mayWatch();
     if (this.view.freecam && (!mayWatch || this.rules.allowSpectatorFreecam === false)) {
       this.view.freecam = false;
@@ -673,6 +724,7 @@ export class CupController extends Emitter {
 
   onGameDisposed(game) {
     if (game !== this.activeGame) return;
+    this.hiddenCars.clear();
     this.view.following = false;
     this.view.followingGame = null;
     this.view.freecamGame = null;
@@ -717,6 +769,13 @@ export class CupController extends Emitter {
   }
 
   // ------------------------------------------------------------- leaving
+
+  /** The main-menu trophy button: join, or show the lobby again while waiting in the menu. */
+  menuButton() {
+    if (!this.active) return "join";
+    if (!this.gameStarted) this.hud.toggleLobby();
+    return "lobby";
+  }
 
   /** Leave the cup: from the lobby overlay, the multiplayer page, or the game's own Exit. */
   leaveCup() {

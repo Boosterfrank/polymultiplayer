@@ -89,7 +89,8 @@
     "worldRecords": {
       "enabled": true,
       "cacheSeconds": 900
-    }
+    },
+    "recordBonus": 1.5
   },
   "kodubProxy": {
     "enabled": false,

@@ -197,8 +197,8 @@ test("live round: a finish opens the finish window for the others, progress is r
   assert.equal(cup.phase, CUP_PHASE.BREAK);
   const end = io.last("p2", MSG.ROUND_END);
   assert.deepEqual(end.results, [
-    { slot: 1, frames: 30000, position: 1, points: 10 },
-    { slot: 2, frames: null, position: null, points: 0 },
+    { slot: 1, frames: 30000, position: 1, points: 10, record: false },
+    { slot: 2, frames: null, position: null, points: 0, record: false },
   ]);
   assert.deepEqual(end.scores.points, { 1: 10, 2: 0 });
   assert.equal(end.nextRoundIn, 5000);
@@ -349,7 +349,7 @@ test("the safety limit ends a round nobody finishes; a racer whose game never lo
   clock.advance(1000);
   assert.equal(cup.phase, CUP_PHASE.BREAK, "4 x WR after GO");
   const end = io.last("p1", MSG.ROUND_END);
-  assert.deepEqual(end.results, [{ slot: 1, frames: null, position: null, points: 0 }]);
+  assert.deepEqual(end.results, [{ slot: 1, frames: null, position: null, points: 0, record: false }]);
 });
 
 test("rules can be given as a PolyCup preset; warmup off skips straight to the countdown; car states reach spectators", () => {
@@ -404,6 +404,37 @@ test("a racer leaving before GO does not hold the others: loading and warmup gat
   cup.finish("p1", cup.sessionId, 20000);
   assert.equal(cup.phase, CUP_PHASE.IDLE, "alone afterwards");
   assert.deepEqual(cup.pointsBySlot(), { 1: 10 });
+});
+
+test("beating the track's cup record multiplies that round's points; the first record on a track does not", () => {
+  const stored = new Map();
+  const recordStore = { get: (id) => stored.get(id) ?? null, set: (id, rec) => stored.set(id, rec) };
+  const { cup, clock, io } = makeCup({ worldRecords: fakeWorldRecords({}) });
+  cup.recordStore = recordStore;
+  assert.equal(cup.recordBonus, 1.5);
+  joinAndLoad(cup, 1);
+  joinAndLoad(cup, 2);
+  clock.advance(5000);
+  reachRacing(cup, clock);
+  clock.advance(30000);
+  cup.finish("p1", cup.sessionId, 25000);
+  cup.finish("p2", cup.sessionId, 26000);
+  assert.deepEqual(cup.pointsBySlot(), { 1: 10, 2: 8 }, "a fresh track's first record earns no bonus");
+  assert.equal(cup.lastRound.recordSlot, null);
+  assert.equal(cup.lastRound.recordSetter, 1);
+  clock.advance(5000);
+  reachRacing(cup, clock);
+  clock.advance(30000);
+  cup.finish("p2", cup.sessionId, 24000); // beats 25000
+  cup.finish("p1", cup.sessionId, 24500); // faster than the old record too, but not the new one
+  assert.deepEqual(cup.pointsBySlot(), { 1: 18, 2: 23 }, "the record setter gets 10 x 1.5 = 15");
+  assert.equal(cup.lastRound.recordSlot, 2);
+  assert.equal(cup.lastRound.recordBonus, 1.5);
+  const end = io.last("p1", MSG.ROUND_END);
+  assert.deepEqual(end.results.map((r) => [r.slot, r.points, r.record]), [[2, 15, true], [1, 8, false]]);
+  assert.ok(io.of("p1", MSG.SERVER_MESSAGE).some((m) => /new track record/.test(m.text)));
+  const off = makeCup({ cup: { recordBonus: 1 } });
+  assert.equal(off.cup.recordBonus, 1);
 });
 
 test("a round whose racers all leave before GO is voided and the lobby waits", () => {

@@ -202,7 +202,14 @@ export class Cup {
       allowRacerChanges: r.allowRacerChanges,
       uploadLeaderboardTimes: r.uploadLeaderboardTimes,
       pool: r.pool,
+      recordBonus: this.recordBonus,
     };
+  }
+
+  /** Points multiplier for a new track record (1 = none). */
+  get recordBonus() {
+    const b = Number(this.settings.recordBonus);
+    return Number.isFinite(b) && b > 0 ? b : 1;
   }
 
   format() {
@@ -415,21 +422,28 @@ export class Cup {
     return frames == null ? (l.withoutWrSeconds ?? 300) * 1000 : Math.max((l.minimumSeconds ?? 120) * 1000, Math.ceil(frames * (l.multiplier ?? 4)));
   }
 
-  /** The track's cup record is permanent: a faster finish replaces it (ties keep the first holder). */
+  /**
+   * The track's cup record is permanent: a faster finish replaces it (ties keep the first holder).
+   * @returns {{setter: number|null, beaten: boolean}} who set a new record this round, and whether an earlier record fell
+   */
   updateTrackRecord(trackId, finishes) {
     const rec = this.records(trackId);
     const stored = this.recordStore.get(trackId);
     let best = stored && Number.isSafeInteger(stored.frames) ? stored : null;
+    let setter = null;
     for (const [slot, frames] of finishes) {
       if (best && frames >= best.frames) continue;
       const p = this.bySlot(slot);
       best = { frames, playerId: p?.id ?? null, nickname: p?.nickname ?? "?", countryCode: p?.countryCode ?? null, setAt: this.clock.now(), cupNumber: this.cupNumber, round: this.round };
+      setter = slot;
     }
+    const beaten = setter != null && !!stored && Number.isSafeInteger(stored.frames);
     if (best && best !== stored) {
       this.recordStore.set(trackId, best);
       this.log.info?.(`[cup] new cup record on ${trackId.slice(0, 8)}: ${best.nickname} ${best.frames} ms`);
     }
     rec.tr = publicCupRecord(best);
+    return { setter, beaten };
   }
 
   // ---------------------------------------------------------------- membership
@@ -854,11 +868,15 @@ export class Cup {
     const places = finishPlaces(finishes);
     const points = {};
     for (const slot of racers) points[slot] = places[slot] ? this.rules.points[places[slot] - 1] ?? 0 : 0;
+    // Beating the track's record (one set in an earlier round or cup) earns the setter extra points.
+    const record = this.updateTrackRecord(run.trackId, run.finishes);
+    const bonus = this.recordBonus;
+    const recordSlot = record.beaten && bonus !== 1 ? record.setter : null;
+    if (recordSlot != null) points[recordSlot] = Math.round(points[recordSlot] * bonus);
     for (const slot of racers) {
       const p = this.bySlot(slot);
       if (p) this.scores.set(p.id, this.pointsOf(p) + points[slot]);
     }
-    this.updateTrackRecord(run.trackId, run.finishes);
     const ranking = cupOrder({ players: this.players.map((p) => ({ slot: p.slot, points: this.pointsOf(p) })) });
     const movement = {};
     for (const slot of ranking) {
@@ -866,17 +884,19 @@ export class Cup {
       movement[slot] = before < 0 ? 0 : before - ranking.indexOf(slot);
     }
     const results = racers
-      .map((slot) => ({ slot, frames: finishes[slot] ?? null, position: places[slot] ?? null, points: points[slot] }))
+      .map((slot) => ({ slot, frames: finishes[slot] ?? null, position: places[slot] ?? null, points: points[slot], record: slot === recordSlot }))
       .sort((a, b) => (a.position ?? 99) - (b.position ?? 99) || a.slot - b.slot);
     const first = results[0];
     const roundWinner = first?.position === 1 && results.filter((r) => r.position === 1).length === 1 ? { type: "player", slot: first.slot } : null;
-    this.lastRound = { cup: this.cupNumber, round: run.round, trackId: run.trackId, finishes, points, dnfs: [...run.dnfs], movement, winnerSlot: roundWinner?.slot ?? null, results };
+    this.lastRound = { cup: this.cupNumber, round: run.round, trackId: run.trackId, finishes, points, dnfs: [...run.dnfs], movement, winnerSlot: roundWinner?.slot ?? null, results, recordSlot, recordBonus: recordSlot != null ? bonus : null, recordSetter: record.setter };
+    if (recordSlot != null) this.serverMessage(`${this.bySlot(recordSlot)?.nickname ?? "?"} set a new track record: ×${bonus} points`);
     this.lastTrack = this.track;
     this.roundHistory.push({ cup: this.cupNumber, round: run.round, trackId: run.trackId, results, roundWinner });
     if (this.roundHistory.length > 100) this.roundHistory.shift();
     this.run = null;
 
     const winner = this.findWinner();
+    if (winner) this.winner = { slot: winner.slot, id: winner.id, nickname: winner.nickname, points: this.pointsOf(winner) }; // part of the round_end state already
     const enough = this.eligiblePlayers.length >= this.settings.minPlayers;
     const nextRoundIn = winner || !enough ? null : this.rules.roundBreakSeconds * 1000;
     const switching = this.trackRounds >= this.rules.roundsPerTrack;

@@ -146,8 +146,8 @@ session). Everything else client-side is trusted – it is a browser game mod.
 ## Repository layout
 
 ```
-manifest.json, 0.3.6/        PML install layout (install URL = repo root)
-mod/src/                     mod source (bundled with esbuild into 0.3.6/main.mod.js)
+manifest.json, 0.3.7/        PML install layout (install URL = repo root)
+mod/src/                     mod source (bundled with esbuild into 0.3.7/main.mod.js)
 mod/src/cup/, mod/src/game.js   the cup on the client: round flow, game hooks, PolyCup-style HUD
 mod/src/splits.js, mod/src/ui/splits.js   Trackmania-style checkpoint splits (cup_split from the server, else the fastest ghost)
 shared/protocol.js           message names + binary framing shared by mod and server
